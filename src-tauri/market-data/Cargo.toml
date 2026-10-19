@@ -1,0 +1,10 @@
+[package]
+name = "saldo-market"
+version = "0.2.0"
+edition = "2021"
+[dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["arbitrary_precision"] }
+rust_decimal = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }

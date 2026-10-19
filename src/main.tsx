@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   LayoutDashboard,
@@ -22,6 +22,7 @@ import {
   Upload,
   Download,
   TrendingUp,
+  Link2,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -57,6 +58,9 @@ import {
 } from "./engine";
 import { desktop, load, save } from "./storage";
 import { previewCSV, csvExport } from "./import";
+import Investments from "./Investments";
+import Connections from "./Connections";
+import type { Market } from "./market";
 import "./style.css";
 const nav = [
   ["Overview", LayoutDashboard],
@@ -66,6 +70,7 @@ const nav = [
   ["Savings", Target],
   ["Investments", TrendingUp],
   ["Analytics", ChartNoAxesCombined],
+  ["Connections", Link2],
   ["Settings", Settings],
 ] as const;
 function App() {
@@ -85,6 +90,39 @@ function App() {
     [edit, setEdit] = useState<Entry | undefined>(),
     [editAccount, setEditAccount] = useState<Account | undefined>(),
     [selected, setSelected] = useState("all");
+  const currentState = useRef(s),
+    writeLock = useRef(false);
+  currentState.current = s;
+  async function persistMarket(
+    market: Market,
+    action: string,
+  ): Promise<boolean> {
+    if (writeLock.current) return false;
+    writeLock.current = true;
+    setBusy(true);
+    try {
+      const n =
+        action === "Market prices updated"
+          ? validate({
+              ...structuredClone(currentState.current),
+              market,
+              revision: currentState.current.revision + 1,
+            })
+          : commit(currentState.current, action, (d) => {
+              d.market = market;
+            });
+      if (!sample) await save(n);
+      currentState.current = n;
+      setS(n);
+      return true;
+    } catch (e) {
+      setError(String(e));
+      return false;
+    } finally {
+      writeLock.current = false;
+      setBusy(false);
+    }
+  }
   useEffect(() => {
     load()
       .then((x) => {
@@ -119,18 +157,21 @@ function App() {
           minimumFractionDigits: 2,
         }).format(n / 100);
   async function apply(action: string, fn: (d: State) => void) {
-    if (busy) return;
+    if (writeLock.current) return;
+    writeLock.current = true;
     setBusy(true);
     setError("");
     try {
-      const n = commit(s, action, fn);
+      const n = commit(currentState.current, action, fn);
       if (!sample) await save(n);
+      currentState.current = n;
       setS(n);
       setNotice(`${action} saved`);
       setModal("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
+      writeLock.current = false;
       setBusy(false);
     }
   }
@@ -1060,20 +1101,21 @@ function App() {
             </>
           )}
           {page === "Investments" && (
-            <section className="panel empty feature-empty">
-              <TrendingUp size={38} />
-              <h2>Your portfolio deserves careful accounting.</h2>
-              <p>
-                Holding trades, cost basis and manual market valuations are not
-                yet implemented.
-                <br />
-                Investment cash accounts work in Accounts; balances here are
-                never invented.
-              </p>
-              <button onClick={() => open("Account")}>
-                Add an investment cash account
-              </button>
-            </section>
+            <Investments
+              market={s.market}
+              sample={sample}
+              hidden={hidden}
+              persist={persistMarket}
+            />
+          )}
+          {page === "Connections" && (
+            <Connections
+              canImport={active.length > 0}
+              onImport={() => {
+                setPage("Transactions");
+                open("Import");
+              }}
+            />
           )}
           {page === "Analytics" && (
             <>
@@ -1166,7 +1208,8 @@ function App() {
                 <div>
                   <strong>Currency & integrations</strong>
                   <p>
-                    PHP only · Asia/Manila · No bank connections or telemetry.
+                    PHP ledger · Asia/Manila · Optional Finnhub quotes · No bank
+                    sync or telemetry.
                   </p>
                 </div>
               </div>
@@ -1199,6 +1242,9 @@ function App() {
                 </div>
                 <button onClick={exportCSV}>Export CSV</button>
               </div>
+              <button onClick={() => setPage("Connections")}>
+                Bank and wallet connections
+              </button>
               <h2>Audit trail</h2>
               {s.audit
                 .slice(-12)
@@ -1219,7 +1265,7 @@ function App() {
                 : "Session-only sample"}{" "}
               · Your money stays yours.
             </span>
-            <span>SALDO / 0.1.0</span>
+            <span>SALDO / 0.2.0</span>
           </footer>
         </div>
       </main>

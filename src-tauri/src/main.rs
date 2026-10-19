@@ -1,4 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod market_commands;
+use market_commands::*;
 use rand::RngCore;
 use rusqlite::Connection;
 fn err(e: impl std::fmt::Display) -> String {
@@ -56,9 +58,18 @@ fn main() {
         .setup(|app| {
             let db = open(app).map_err(std::io::Error::other)?;
             app.manage(Store(Mutex::new(db)));
+            app.manage(MarketRuntime::default());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![load_state, save_state])
+        .invoke_handler(tauri::generate_handler![
+            load_state,
+            save_state,
+            market_key_status,
+            set_market_key,
+            clear_market_key,
+            refresh_market_quotes,
+            open_official_resource
+        ])
         .run(tauri::generate_context!())
         .expect("SALDO startup failed; encrypted storage unavailable");
 }

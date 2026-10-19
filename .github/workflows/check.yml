@@ -14,6 +14,7 @@ jobs:
       - run: npm ci
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --locked --manifest-path src-tauri/ledger-core/Cargo.toml
+      - run: cargo test --locked --manifest-path src-tauri/market-data/Cargo.toml
       - run: npm run format:check
       - run: npm test
       - run: npm run build
@@ -27,10 +28,14 @@ jobs:
           - os: macos-latest
             target: universal-apple-darwin
             bundles: app,dmg
+            test_target: aarch64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             bundles: nsis,msi
+            test_target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -44,7 +49,8 @@ jobs:
         with:
           workspaces: src-tauri
       - run: npm ci
-      - run: cargo test --locked --manifest-path src-tauri/ledger-core/Cargo.toml
+      - run: cargo test --release --target ${{ matrix.test_target }} --locked --manifest-path src-tauri/ledger-core/Cargo.toml
+      - run: cargo test --release --target ${{ matrix.test_target }} --locked --manifest-path src-tauri/market-data/Cargo.toml
       - run: npm run tauri build -- --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} -- --locked
       - uses: actions/upload-artifact@v4
         with:
@@ -67,9 +73,9 @@ jobs:
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v0.1.0-dev.{0}', github.run_number) }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v0.2.0-dev.{0}', github.run_number) }}
           target_commitish: ${{ github.sha }}
-          name: SALDO 0.1.0 — Development preview
+          name: SALDO 0.2.0 — Market watch development preview
           prerelease: true
           fail_on_unmatched_files: true
           files: |
@@ -83,6 +89,12 @@ jobs:
 
             These installers are unsigned/not notarized, so the operating system may show a security prompt. No public-distribution signing identity is configured.
 
-            Implemented: accounts, integer ledger, transfers, CSV, reconciliation, budgets, virtual savings goals and encrypted local database. Investment holdings, recurring rules, app lock and portable backups remain unfinished. See STATUS.md and README.md in the source archive.
+            Implemented: accounts, integer ledger, transfers, CSV, reconciliation, budgets, virtual savings goals and encrypted local database. New in 0.2.0: optional Finnhub US-share/ETF quotes with OS-keychain API keys, manual or 60-second refresh, cached timestamps, stale-price labels, manual USD/PHP conversion and informational position values. Add SPY, VOO or IVV for S&P 500 ETF tracking; these are not the index level. A user-provided Finnhub API key and suitable plan are required. No authenticated live-provider test was possible without a user key.
+
+            Bank shortcuts open official resources for GCash, Maya, BPI, MariBank and GoTyme; they do not provide bank sync or share browser sessions. No authorized account-read integration is configured.
+
+            Informational positions are excluded from net worth and do not post investment trades. Full investment trade accounting, recurring rules, app lock and portable backups remain unfinished.
+
+            Schema upgrades to version 2 in the same app-data directory. Older SALDO builds cannot open the upgraded database. See STATUS.md and README.md in the source archive.
 
             Automated build and accounting tests do not replace native installation and recovery testing. Start with the separate sample workspace.

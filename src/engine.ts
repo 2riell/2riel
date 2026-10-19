@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { emptyMarket, marketSchema } from "./market";
 export const presets = [
   "GCash",
   "MariBank",
@@ -68,6 +69,7 @@ export const entrySchema = z.object({
   importKey: z.string().optional(),
 });
 export const stateSchema = z.object({
+  market: marketSchema.default(emptyMarket),
   revision: z.number().int().nonnegative(),
   onboarded: z.boolean(),
   accounts: z.array(accountSchema),
@@ -99,6 +101,7 @@ export type Account = z.infer<typeof accountSchema>;
 export type Entry = z.infer<typeof entrySchema>;
 export type State = z.infer<typeof stateSchema>;
 export const empty = (): State => ({
+  market: emptyMarket(),
   revision: 0,
   onboarded: false,
   accounts: [],

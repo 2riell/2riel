@@ -32,3 +32,13 @@ Dependency locks (`package-lock.json`, both Cargo.lock files) are included. The 
 GitHub Actions [run 39248617740](https://github.com/2riell/2riel/actions/runs/39248617740) passed the frontend checks, six Rust SQLCipher tests on each native host, Windows x64 EXE/MSI packaging, macOS universal (Apple silicon + Intel) DMG packaging, artifact upload and release publication. Release [v0.1.0-dev.2](https://github.com/2riell/2riel/releases/tag/v0.1.0-dev.2) was built from f06dab11bfeaccb07425067d771a5b7aa4d759ea. It includes a browser regression verifying that editing a CSV transaction retains its import identity.
 
 This supersedes the initial snapshot's statement that no native packages had been built. Signing/notarization, installation, native UI/keychain smoke tests and recovery testing remain outstanding. The binaries are unsigned development previews.
+
+## Version 0.2 local validation
+
+- 22 Vitest financial/market-valuation tests pass.
+- 9 SQLCipher repository tests pass, including v1-to-v2 migration, informational position storage, and avoiding duplicated full audits for provider-only quote observations.
+- 7 independent market-adapter tests pass, covering precise quote parsing, stale timestamps, invalid/future/missing prices, secret-safe header request construction, authentication/rate-limit/status messages and size/key constraints.
+- 4 Chromium workflows pass, including manual ETF valuation, dated PHP conversion, unchanged ledger net worth, and all five bank/wallet resource shortcuts without credential forms.
+- Strict TypeScript checks now include browser test/config files. Production frontend build passes.
+
+No authenticated Finnhub quote, OS-keychain write/read or native external-browser launch was exercised locally. No banking API credentials or partner approval were available. Windows/macOS compilation, packaging and the 0.2 release must be checked in GitHub Actions separately; the earlier 0.1 build results do not validate the new native commands.

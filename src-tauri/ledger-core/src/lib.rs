@@ -27,6 +27,84 @@ fn date(v: &Value, k: &str, future: bool) -> Result<(), String> {
     }
     Ok(())
 }
+fn market_validate(v: &Value) -> Result<(), String> {
+    let Some(m) = v.get("market") else {
+        return Ok(());
+    };
+    if m["enabled"].as_bool().is_none() || m["autoRefresh"].as_bool().is_none() {
+        return Err("Invalid market preferences".into());
+    }
+    let ps = m["positions"]
+        .as_array()
+        .ok_or("Invalid market watchlist")?;
+    if ps.len() > 10 {
+        return Err("Watchlist is limited to 10 symbols".into());
+    }
+    let mut symbols = std::collections::HashSet::new();
+    let mut ids = std::collections::HashSet::new();
+    let mut total = 0i128;
+    for p in ps {
+        let symbol = text(p, "symbol")?;
+        if symbol.is_empty()
+            || symbol.len() > 12
+            || !symbol.as_bytes()[0].is_ascii_uppercase()
+            || !symbol
+                .bytes()
+                .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'.' || b == b'-')
+            || !symbols.insert(symbol)
+            || !ids.insert(text(p, "id")?)
+        {
+            return Err("Invalid/duplicate market symbol or ID".into());
+        }
+        if text(p, "name")?.trim().is_empty() {
+            return Err("Position name required".into());
+        }
+        let units = integer(p, "unitsMicros")?;
+        if !(0..=1_000_000_000_000).contains(&units) {
+            return Err("Invalid position quantity".into());
+        }
+        if !p["costBasisUsdMinor"].is_null() && integer(p, "costBasisUsdMinor")? < 0 {
+            return Err("Invalid cost basis".into());
+        }
+        if !p["quote"].is_null() {
+            let q = &p["quote"];
+            let price = integer(q, "priceMicros")?;
+            if text(q, "symbol")? != symbol
+                || !(1..=1_000_000_000_000).contains(&price)
+                || !["manual", "finnhub"].contains(&text(q, "provider")?)
+            {
+                return Err("Invalid market quote".into());
+            }
+            let ts = integer(q, "timestamp")?;
+            if ts <= 0 || ts > chrono::Utc::now().timestamp() + 300 {
+                return Err("Invalid quote timestamp".into());
+            }
+            chrono::DateTime::parse_from_rfc3339(text(q, "receivedAt")?)
+                .map_err(|_| "Invalid quote receipt time")?;
+            if !q["previousCloseMicros"].is_null()
+                && !(0..=1_000_000_000_000).contains(&integer(q, "previousCloseMicros")?)
+            {
+                return Err("Invalid previous price".into());
+            }
+            total += (units as i128 * price as i128 + 5_000_000_000) / 10_000_000_000;
+        }
+    }
+    if total > 9_000_000_000_000_000 {
+        return Err("Market valuation exceeds precision limit".into());
+    }
+    if !m["fx"].is_null() {
+        let fx = &m["fx"];
+        let rate = integer(fx, "rateMicros")?;
+        date(fx, "date", false)?;
+        if !(1..=1_000_000_000_000).contains(&rate)
+            || (total * rate as i128 + 500_000) / 1_000_000 > 9_000_000_000_000_000
+        {
+            return Err("FX valuation exceeds precision limit".into());
+        }
+    }
+    Ok(())
+}
+
 fn validate(v: &Value) -> Result<(), String> {
     for key in [
         "accounts",
@@ -91,6 +169,7 @@ fn validate(v: &Value) -> Result<(), String> {
         text(event, "at")?;
         text(event, "action")?;
     }
+    market_validate(v)?;
     // Use wider integer arithmetic to reject ledgers that JavaScript cannot represent exactly.
     let mut worth = 0i128;
     for a in v["accounts"].as_array().unwrap() {
@@ -124,6 +203,49 @@ fn validate(v: &Value) -> Result<(), String> {
     Ok(())
 }
 
+fn quote_only_update(before: &Value, after: &Value) -> bool {
+    let Some(old) = before["market"]["positions"].as_array() else {
+        return false;
+    };
+    let Some(new) = after["market"]["positions"].as_array() else {
+        return false;
+    };
+    let mut changed = false;
+    for p in new {
+        let Some(prior) = old.iter().find(|x| x["id"] == p["id"]) else {
+            return false;
+        };
+        if prior["quote"] != p["quote"] {
+            changed = true;
+            if p["quote"]["provider"].as_str() != Some("finnhub") {
+                return false;
+            }
+        }
+    }
+    if !changed {
+        return false;
+    }
+
+    let mut a = before.clone();
+    let mut b = after.clone();
+    for v in [&mut a, &mut b] {
+        let Some(root) = v.as_object_mut() else {
+            return false;
+        };
+        root.remove("revision");
+        root.remove("audit");
+        let Some(ps) = v["market"]["positions"].as_array_mut() else {
+            return false;
+        };
+        for p in ps {
+            let Some(object) = p.as_object_mut() else {
+                return false;
+            };
+            object.remove("quote");
+        }
+    }
+    a == b && before["market"] != after["market"]
+}
 pub fn save(db: &mut Connection, json: String, expected_revision: i64) -> Result<(), String> {
     if json.len() > 10_000_000 {
         return Err("Database update too large".into());
@@ -148,7 +270,14 @@ pub fn save(db: &mut Connection, json: String, expected_revision: i64) -> Result
     if v["onboarded"].as_bool().is_none() {
         return Err("Invalid onboarding state".into());
     }
-    for table in ["entries", "goals", "snapshots", "budgets", "accounts"] {
+    for table in [
+        "market_positions",
+        "entries",
+        "goals",
+        "snapshots",
+        "budgets",
+        "accounts",
+    ] {
         tx.execute(&format!("DELETE FROM {table}"), [])
             .map_err(err)?;
     }
@@ -235,15 +364,34 @@ pub fn save(db: &mut Connection, json: String, expected_revision: i64) -> Result
         )
         .map_err(err)?;
     }
+    if let Some(positions) = v["market"]["positions"].as_array() {
+        for p in positions {
+            tx.execute(
+                "INSERT INTO market_positions VALUES(?1,?2,?3,?4)",
+                params![
+                    text(p, "id")?,
+                    text(p, "symbol")?,
+                    integer(p, "unitsMicros")?,
+                    p.to_string()
+                ],
+            )
+            .map_err(err)?;
+        }
+    }
     let over:i64=tx.query_row("SELECT count(*) FROM (SELECT g.account_id,sum(g.allocated) AS reserved FROM goals g GROUP BY g.account_id) x JOIN accounts a ON a.id=x.account_id WHERE reserved > max(0,a.opening+coalesce((SELECT sum(CASE WHEN e.account_id=a.id THEN (CASE WHEN e.kind IN ('expense','transfer') THEN -e.amount ELSE e.amount END)-e.fee ELSE 0 END + CASE WHEN e.kind='transfer' AND e.destination_id=a.id THEN e.amount ELSE 0 END) FROM entries e WHERE e.account_id=a.id OR e.destination_id=a.id),0))",[],|r|r.get(0)).map_err(err)?;
     if over > 0 {
         return Err("Goal allocations exceed available funds".into());
     }
-    tx.execute(
-        "INSERT INTO audit(at,previous_json,new_json) VALUES(datetime('now'),?1,?2)",
-        params![previous, json],
-    )
-    .map_err(err)?;
+    let before: Value = serde_json::from_str(&previous).map_err(err)?;
+    // Provider price refreshes are non-ledger observations. Avoid duplicating the
+    // complete financial database in audit every minute; financial edits still audit fully.
+    if !quote_only_update(&before, &v) {
+        tx.execute(
+            "INSERT INTO audit(at,previous_json,new_json) VALUES(datetime('now'),?1,?2)",
+            params![previous, json],
+        )
+        .map_err(err)?;
+    }
     tx.execute(
         "UPDATE app_state SET revision=?1,json=?2 WHERE singleton=1",
         params![revision, json],
@@ -263,13 +411,21 @@ pub fn open(path: impl AsRef<std::path::Path>, key: &str) -> Result<Connection, 
     let version: i64 = db
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .map_err(err)?;
-    if version > 1 {
+    if version > 2 {
         return Err("Database was created by a newer SALDO version".into());
     }
     if version == 0 {
         db.execute_batch(concat!(
             "BEGIN IMMEDIATE;",
             include_str!("../../migrations/001.sql"),
+            "COMMIT;"
+        ))
+        .map_err(err)?;
+    }
+    if version < 2 {
+        db.execute_batch(concat!(
+            "BEGIN IMMEDIATE;",
+            include_str!("../../migrations/002.sql"),
             "COMMIT;"
         ))
         .map_err(err)?;
@@ -367,5 +523,75 @@ mod tests {
         assert_eq!(count, 2);
         drop(db);
         std::fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn migrates_v1_without_losing_financial_records() {
+        let path = std::env::temp_dir().join(format!(
+            "saldo-migrate-{}-{}.db",
+            std::process::id(),
+            chrono::Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        let key = "12".repeat(32);
+        {
+            let mut db = open(&path, &key).unwrap();
+            save(&mut db, state().to_string(), 0).unwrap();
+            db.execute_batch("DROP TABLE market_positions; PRAGMA user_version=1;")
+                .unwrap();
+        }
+        let db = open(&path, &key).unwrap();
+        let version: i64 = db
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, 2);
+        let accounts: i64 = db
+            .query_row("SELECT count(*) FROM accounts", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(accounts, 2);
+        let audit: i64 = db
+            .query_row("SELECT count(*) FROM audit", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(audit, 1);
+        let revision: i64 = db
+            .query_row("SELECT revision FROM app_state", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(revision, 1);
+        drop(db);
+        std::fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn market_positions_are_persisted_without_becoming_accounts() {
+        let mut db = memory();
+        let mut s = state();
+        s["market"] = json!({"enabled":false,"autoRefresh":false,"positions":[{"id":"p","symbol":"SPY","name":"ETF","unitsMicros":500000,"costBasisUsdMinor":5000,"quote":null}],"fx":null});
+        save(&mut db, s.to_string(), 0).unwrap();
+        let count: i64 = db
+            .query_row("SELECT count(*) FROM market_positions", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+        let opening: i64 = db
+            .query_row("SELECT sum(opening) FROM accounts", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(opening, 10000);
+    }
+    #[test]
+    fn provider_quote_refreshes_do_not_duplicate_full_financial_audit() {
+        let mut db = memory();
+        let mut s = state();
+        s["market"] = json!({"enabled":true,"autoRefresh":true,"positions":[{"id":"p","symbol":"SPY","name":"ETF","unitsMicros":500000,"costBasisUsdMinor":5000,"quote":null}],"fx":null});
+        save(&mut db, s.to_string(), 0).unwrap();
+        s["revision"] = json!(2);
+        s["market"]["positions"][0]["quote"] = json!({"symbol":"SPY","priceMicros":123450000,"previousCloseMicros":120000000,"timestamp":1700000000,"receivedAt":"2023-11-14T22:13:20Z","provider":"finnhub"});
+        save(&mut db, s.to_string(), 1).unwrap();
+        let count: i64 = db
+            .query_row("SELECT count(*) FROM audit", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+        s["revision"] = json!(3);
+        s["accounts"][0]["name"] = json!("Renamed cash");
+        save(&mut db, s.to_string(), 2).unwrap();
+        let count: i64 = db
+            .query_row("SELECT count(*) FROM audit", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 2);
     }
 }

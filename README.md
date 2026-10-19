@@ -8,7 +8,7 @@
 
 These are unsigned development previews. Native packaging and automated checks passed on GitHub runners; installation and OS keychain workflows have not been manually tested. App lock, investment positions and portable backups are not implemented yet. Begin with sample data.
 
-A local-first Philippine personal finance desktop app. **This is a tested development milestone, not a complete production release.** The ledger, accounts, manual transactions, monthly budgets, virtual savings earmarks, universal CSV imports and reconciliation work. The remaining release scope is explicit in [STATUS.md](STATUS.md).
+A local-first Philippine personal finance desktop app. **This is a tested development milestone, not a complete production release.** The ledger, accounts, manual transactions, monthly budgets, virtual savings earmarks, universal CSV imports, reconciliation and informational investment watchlists work. Version 0.2 adds optional Finnhub quotes and official bank/app shortcuts; see [market-data setup and limitations](docs/MARKET-DATA.md). The remaining release scope is explicit in [STATUS.md](STATUS.md).
 
 ## Run
 
@@ -88,3 +88,5 @@ tests/                          Chromium workflow tests
 ```
 
 Read [architecture/security notes](docs/ARCHITECTURE.md) before putting real financial data into this development build. Portable encrypted backup, app lock, and full recovery workflows are not implemented yet.
+
+Market-data adapter tests: `cargo test --locked --manifest-path src-tauri/market-data/Cargo.toml`. Read `docs/MARKET-DATA.md` before enabling external quotes.

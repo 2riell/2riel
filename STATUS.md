@@ -38,3 +38,12 @@
 This is a usable core milestone, not the entire requested product. Do not treat a passing browser build or independent SQLCipher test as certification of the native shell. Do not migrate sole copies of important financial records until backup/recovery and target-platform builds have been verified.
 
 The repository rewrites the normalized projections and JSON document atomically for each save; this is suitable for small personal ledgers but does not yet have incremental writes, pagination, or audit pruning. The React app is a single view module and should be split into feature components as the remaining modules grow. Monetary display/chart coordinates use floating point after exact totals are calculated; ledger computations and storage use integer cents.
+
+## Added in 0.2.0
+
+- Working US ticker watchlist and informational position quantities, exact USD valuations, optional manual total cost basis, unrealized change and dated manual USD/PHP estimates. These do not post trades or affect ledger net worth.
+- Finnhub quote adapter, per-ticker market timestamps, manual valuation fallback, stale-price labels and optional 60-second refresh while Investments is visible. A valid user API key and suitable provider plan are required; no authenticated live-provider test was possible without a key.
+- OS-keychain API key storage, explicit opt-in, native rate limit, bounded HTTP parsing, provider errors and cache retention. No financial account data is sent to Finnhub.
+- Schema 2 upgrade preserving existing records, normalized market position projection and migration tests. Provider observations do not duplicate the entire financial audit on each refresh.
+- Connections for GCash, Maya, BPI, MariBank and GoTyme with official resource shortcuts and truthful unavailable sync status. BPI sign-in happens only on BPI's external official site. Bank/wallet authorization, balance read APIs and transaction sync remain unavailable; no partner access has been approved.
+- Full investment trades/FIFO/sales/dividends and ledger-backed positions, streaming tick data and automatic FX are still unfinished. Existing v0.1 notes above describe the earlier milestone and are superseded by these additions.

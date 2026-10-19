@@ -1,0 +1,98 @@
+import { describe, it, expect } from "vitest";
+import {
+  emptyMarket,
+  scaled,
+  unscale,
+  positionValue,
+  toPhp,
+  quoteAge,
+  marketSchema,
+  marketTotals,
+  type Position,
+} from "./market";
+import { empty, netWorth, validate, type State } from "./engine";
+const position = (): Position => ({
+  id: "p",
+  symbol: "SPY",
+  name: "S&P 500 ETF",
+  unitsMicros: 500000,
+  costBasisUsdMinor: 5000,
+  quote: {
+    symbol: "SPY",
+    priceMicros: 123450000,
+    previousCloseMicros: 120000000,
+    timestamp: 1700000000,
+    receivedAt: "2023-11-14T22:13:20.000Z",
+    provider: "finnhub",
+  },
+});
+describe("market valuation accuracy and provenance", () => {
+  it("parses six-place quantities without multiplying floats", () => {
+    expect(scaled("0.123456")).toBe(123456);
+    expect(unscale(scaled("100.50"))).toBe("100.5");
+    expect(unscale(0)).toBe("0");
+    expect(() => scaled("1.1234567")).toThrow();
+    expect(() => scaled("-1")).toThrow();
+  });
+  it("rounds fractional unit valuations to cents once", () => {
+    expect(positionValue(position())).toBe(6173);
+    const p = position();
+    p.unitsMicros = 3000000;
+    p.quote!.priceMicros = 290000;
+    expect(positionValue(p)).toBe(87);
+  });
+  it("converts using an explicit fixed-precision dated rate", () => {
+    expect(toPhp(1001, { rateMicros: 56123456, date: "2026-01-01" })).toBe(
+      56180,
+    );
+    expect(toPhp(1001, null)).toBeNull();
+  });
+  it("does not invent prices or value unpriced holdings at cost", () => {
+    const m = emptyMarket();
+    m.positions = [{ ...position(), quote: null }];
+    expect(marketTotals(m)).toEqual({ usd: 0, php: null, unpriced: 1 });
+    expect(positionValue(m.positions[0])).toBeNull();
+  });
+  it("labels stale prices by market time rather than download time", () => {
+    const q = position().quote!;
+    q.receivedAt = new Date(1700100000000).toISOString();
+    expect(quoteAge(q, 1700100000000)).toContain("Stale");
+    q.provider = "manual";
+    expect(quoteAge(q)).toContain("Manual");
+  });
+  it("rejects duplicate symbols and mismatched quote tickers", () => {
+    const m = emptyMarket();
+    m.positions = [position(), { ...position(), id: "q" }];
+    expect(() => marketSchema.parse(m)).toThrow();
+    m.positions = [position()];
+    m.positions[0].quote!.symbol = "VOO";
+    expect(() => marketSchema.parse(m)).toThrow();
+  });
+  it("informational positions never create ledger assets or cash movements", () => {
+    const s = empty();
+    const before = netWorth(s);
+    s.market.positions = [position()];
+    expect(netWorth(validate(s))).toBe(before);
+    expect(s.entries).toEqual([]);
+  });
+  it("loads existing v0.1 state with a disabled empty market", () => {
+    const s: Partial<State> = empty();
+    delete s.market;
+    expect(validate(s as State).market).toEqual(emptyMarket());
+  });
+  it("rejects negative basis, invalid dates and excess watchlist sizes", () => {
+    const m = emptyMarket();
+    m.positions = [{ ...position(), costBasisUsdMinor: -1 }];
+    expect(() => marketSchema.parse(m)).toThrow();
+    m.positions = [];
+    m.fx = { rateMicros: 56000000, date: "2026-02-30" };
+    expect(() => marketSchema.parse(m)).toThrow();
+    m.fx = null;
+    m.positions = Array.from({ length: 11 }, (_, i) => ({
+      ...position(),
+      id: String(i),
+      symbol: "A" + i,
+    }));
+    expect(() => marketSchema.parse(m)).toThrow();
+  });
+});

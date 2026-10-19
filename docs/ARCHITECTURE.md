@@ -55,3 +55,7 @@ The universal adapter parses Papa Parse CSV, maps fixed headers, validates decim
 ## Next release gates
 
 Implement portable encrypted backup and restore with recovery tests; application lock; feature-level UI extraction; generated command DTOs; native integration tests on both operating systems; signed/notarized installers; OS keychain recovery/deletion and lock behavior tests; screen-reader/contrast review; investment cash/position invariants before enabling portfolios. Dependencies are locked, but their compatibility and security still require ongoing maintenance and audit before a public release.
+
+## Version 0.2 additions
+
+See [market data and bank access](MARKET-DATA.md). Schema 2 adds informational position projections; existing state defaults to disabled market requests. Native market commands use a fixed HTTPS provider endpoint and OS-keychain secrets. The old description of IPC limited to load/save applies to v0.1; v0.2 also exposes consent-gated key configuration/quotes and a fixed allowlist of official external resources. It exposes no arbitrary URL opener, bank credentials, session scraper or account sync. Provider-only quote updates are non-ledger observations and do not duplicate the entire financial audit. All actual financial edits continue to audit.

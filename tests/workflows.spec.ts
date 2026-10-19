@@ -174,3 +174,59 @@ test("transfers, fees and reviewable reconciliation preserve accounting", async 
     page.getByRole("button", { name: "Review & post adjustment" }),
   ).toHaveCount(0);
 });
+
+test("informational ETF prices, exact PHP valuation and bank shortcuts", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Load example data" }).click();
+  const initial = await page
+    .locator(".stat.featured .stat-value")
+    .textContent();
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Investments", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Add ticker" }).click();
+  await page.getByLabel("US ticker").fill("SPY");
+  await page.getByLabel("Display name").fill("S&P 500 ETF");
+  await page.getByLabel("Units (0 for watchlist only)").fill("0.5");
+  await page.getByLabel("Optional total cost basis").fill("50.00");
+  await page.getByRole("button", { name: "Save ticker" }).click();
+  let dialogs = 0;
+  page.on("dialog", async (d) => {
+    if (d.type() === "prompt")
+      await d.accept(dialogs++ === 0 ? "123.45" : "2026-01-01");
+    else await d.accept();
+  });
+  await page.getByRole("button", { name: "Manual price", exact: true }).click();
+  await expect(page.locator("tbody")).toContainText("$61.73");
+  await expect(page.locator("tbody")).toContainText("$11.73 unrealized");
+  await expect(page.locator("tbody")).toContainText("Manual valuation");
+  await page.getByLabel("PHP per 1 USD").fill("56.123456");
+  await page.getByLabel("Rate date").fill("2026-01-01");
+  await page.getByRole("button", { name: "Save exchange rate" }).click();
+  await expect(page.locator(".stats")).toContainText("₱3,464.50");
+  await expect(
+    page.getByRole("button", { name: "Refresh prices" }),
+  ).toBeDisabled();
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Overview", exact: true })
+    .click();
+  await expect(page.locator(".stat.featured .stat-value")).toHaveText(initial!);
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Connections", exact: true })
+    .click();
+  await expect(page.getByText("Sync unavailable", { exact: true })).toHaveCount(
+    5,
+  );
+  await expect(page.locator("input[type=password]")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Sign in on the official BPI website" }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "Official app sign-in guidance" }),
+  ).toBeEnabled();
+});
