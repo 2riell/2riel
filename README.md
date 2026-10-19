@@ -2,9 +2,11 @@
 
 ## Download the development app
 
-- [Windows x64 setup (.exe)](https://github.com/2riell/2riel/releases/download/v0.1.0-dev.2/SALDO_0.1.0_x64-setup.exe)
-- [macOS universal (.dmg), Apple silicon and Intel](https://github.com/2riell/2riel/releases/download/v0.1.0-dev.2/SALDO_0.1.0_universal.dmg)
-- [Release notes and alternative MSI installer](https://github.com/2riell/2riel/releases/tag/v0.1.0-dev.2)
+- [Windows x64 setup (.exe)](https://github.com/2riell/2riel/releases/download/v0.2.0-dev.4/SALDO_0.2.0_x64-setup.exe)
+- [macOS universal (.dmg), Apple silicon and Intel](https://github.com/2riell/2riel/releases/download/v0.2.0-dev.4/SALDO_0.2.0_universal.dmg)
+- [Release notes and alternative MSI installer](https://github.com/2riell/2riel/releases/tag/v0.2.0-dev.4)
+
+Version 0.2.0 adds optional market quotes. In Investments, add SPY, VOO or IVV, configure your own Finnhub API key, then refresh or opt into 60-second refresh. See [setup and privacy notes](docs/MARKET-DATA.md). Bank/app shortcuts are available; bank login/session integration and balance sync are not.
 
 These are unsigned development previews. Native packaging and automated checks passed on GitHub runners; installation and OS keychain workflows have not been manually tested. App lock, investment positions and portable backups are not implemented yet. Begin with sample data.
 

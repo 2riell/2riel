@@ -42,3 +42,9 @@ This supersedes the initial snapshot's statement that no native packages had bee
 - Strict TypeScript checks now include browser test/config files. Production frontend build passes.
 
 No authenticated Finnhub quote, OS-keychain write/read or native external-browser launch was exercised locally. No banking API credentials or partner approval were available. Windows/macOS compilation, packaging and the 0.2 release must be checked in GitHub Actions separately; the earlier 0.1 build results do not validate the new native commands.
+
+## Version 0.2 native release verification
+
+GitHub Actions [run 39255617376](https://github.com/2riell/2riel/actions/runs/39255617376) passed frontend tests/build, native SQLCipher and market-adapter tests, Windows x64 EXE/MSI packaging, macOS universal DMG packaging, artifact upload and release publication. Source commit: `53c41b93f7c701319918d41cbcfece7a3c70a882`. Published development release: [v0.2.0-dev.4](https://github.com/2riell/2riel/releases/tag/v0.2.0-dev.4).
+
+This supersedes the local-validation note that native 0.2 builds were still pending. Windows/macOS installation and UI/keychain runtime testing, an authenticated Finnhub call, real bank account-read integration, code signing and notarization remain unverified or unavailable as described above.
