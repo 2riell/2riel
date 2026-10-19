@@ -9,7 +9,7 @@
 5. Select “Refresh prices”, or opt into 60-second refresh while the page is visible. Tick-by-tick streaming is not implemented. Do not assume a quote is live merely because you just refreshed it: its original market timestamp and staleness are displayed. Coverage and feed delays depend on the provider plan.
 6. For a PHP estimate, enter an explicit PHP-per-USD exchange rate and its date. This rate is manual, not live.
 
-SPY, VOO and IVV are ETFs that track the S&P 500. Their share prices are not the index level. Direct S&P 500 index quotes are not a supported preset. Custom symbols are US share/ETF tickers; unsupported symbols fail visibly rather than inventing values. A maximum of ten symbols is supported.
+SPY, VOO and IVV are ETFs that track the S&P 500. Their share prices are not the index level. Direct S&P 500 index quotes are not a supported preset. Custom symbols use US ticker syntax (bare tickers and A/B share classes only); exchange-qualified foreign tickers are rejected so they cannot be silently labeled USD. unsupported symbols fail visibly rather than inventing values. A maximum of ten symbols is supported.
 
 No authenticated Finnhub call was tested in this session because no user API key was supplied. Parser, request construction and failure handling are implemented and tested without credentials. You must configure a valid key and a plan supporting your desired instruments; actual provider availability, response timing and account entitlements remain to be verified on your device.
 

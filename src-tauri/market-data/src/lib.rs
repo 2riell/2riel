@@ -23,12 +23,21 @@ pub struct Batch {
     pub errors: Vec<QuoteError>,
 }
 pub fn valid_symbol(s: &str) -> bool {
-    !s.is_empty()
-        && s.len() <= 12
-        && s.as_bytes()[0].is_ascii_uppercase()
-        && s.bytes()
-            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'.' || b == b'-')
+    let mut parts = s.split(['.', '-']);
+    let base = parts.next().unwrap_or("");
+    if base.is_empty()
+        || base.len() > 10
+        || !base.as_bytes()[0].is_ascii_uppercase()
+        || !base
+            .bytes()
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
+    {
+        return false;
+    }
+    let class = parts.next();
+    matches!(class, None | Some("A") | Some("B")) && parts.next().is_none()
 }
+
 pub fn valid_key(key: &str) -> bool {
     (8..=256).contains(&key.len()) && key.bytes().all(|b| b.is_ascii_graphic())
 }
@@ -188,6 +197,8 @@ mod tests {
         assert!(!valid_symbol("SPY&token=x"));
         assert!(!valid_symbol("^GSPC"));
         assert!(valid_symbol("BRK.B"));
+        assert!(!valid_symbol("VOD.L"));
+        assert!(!valid_symbol("AIR.PA"));
         assert!(parse_quote("SPY", r#"{"c":100,"t":1700001000}"#, 1700000000).is_err());
     }
     #[test]

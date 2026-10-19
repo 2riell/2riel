@@ -27,6 +27,21 @@ fn date(v: &Value, k: &str, future: bool) -> Result<(), String> {
     }
     Ok(())
 }
+fn valid_market_symbol(s: &str) -> bool {
+    let mut parts = s.split(['.', '-']);
+    let base = parts.next().unwrap_or("");
+    if base.is_empty()
+        || base.len() > 10
+        || !base.as_bytes()[0].is_ascii_uppercase()
+        || !base
+            .bytes()
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
+    {
+        return false;
+    }
+    let class = parts.next();
+    matches!(class, None | Some("A") | Some("B")) && parts.next().is_none()
+}
 fn market_validate(v: &Value) -> Result<(), String> {
     let Some(m) = v.get("market") else {
         return Ok(());
@@ -45,15 +60,7 @@ fn market_validate(v: &Value) -> Result<(), String> {
     let mut total = 0i128;
     for p in ps {
         let symbol = text(p, "symbol")?;
-        if symbol.is_empty()
-            || symbol.len() > 12
-            || !symbol.as_bytes()[0].is_ascii_uppercase()
-            || !symbol
-                .bytes()
-                .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'.' || b == b'-')
-            || !symbols.insert(symbol)
-            || !ids.insert(text(p, "id")?)
-        {
+        if !valid_market_symbol(symbol) || !symbols.insert(symbol) || !ids.insert(text(p, "id")?) {
             return Err("Invalid/duplicate market symbol or ID".into());
         }
         if text(p, "name")?.trim().is_empty() {

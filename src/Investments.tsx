@@ -308,7 +308,7 @@ export default function Investments({
                 name="symbol"
                 defaultValue={editing?.symbol || ""}
                 placeholder="SPY, VOO, IVV, AAPL"
-                pattern="[A-Za-z][A-Za-z0-9.\-]{0,11}"
+                pattern="[A-Za-z][A-Za-z0-9]{0,9}(?:[.\-][ABab])?"
               />
             </label>
             <label>

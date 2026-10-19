@@ -1,7 +1,7 @@
 import { z } from "zod";
 const fixed = z.number().int().min(0).max(1_000_000_000_000);
 export const quoteSchema = z.object({
-  symbol: z.string().regex(/^[A-Z][A-Z0-9.-]{0,11}$/),
+  symbol: z.string().regex(/^[A-Z][A-Z0-9]{0,9}(?:[.-][AB])?$/),
   priceMicros: fixed.positive(),
   previousCloseMicros: fixed.nullable(),
   timestamp: z.number().int().positive(),
@@ -10,7 +10,7 @@ export const quoteSchema = z.object({
 });
 export const positionSchema = z.object({
   id: z.string().min(1),
-  symbol: z.string().regex(/^[A-Z][A-Z0-9.-]{0,11}$/),
+  symbol: z.string().regex(/^[A-Z][A-Z0-9]{0,9}(?:[.-][AB])?$/),
   name: z.string().trim().min(1).max(100),
   unitsMicros: fixed,
   costBasisUsdMinor: z.number().int().nonnegative().safe().nullable(),
