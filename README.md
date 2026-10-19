@@ -1,5 +1,13 @@
 # SALDO
 
+## Download the development app
+
+- [Windows x64 setup (.exe)](https://github.com/2riell/2riel/releases/download/v0.1.0-dev.2/SALDO_0.1.0_x64-setup.exe)
+- [macOS universal (.dmg), Apple silicon and Intel](https://github.com/2riell/2riel/releases/download/v0.1.0-dev.2/SALDO_0.1.0_universal.dmg)
+- [Release notes and alternative MSI installer](https://github.com/2riell/2riel/releases/tag/v0.1.0-dev.2)
+
+These are unsigned development previews. Native packaging and automated checks passed on GitHub runners; installation and OS keychain workflows have not been manually tested. App lock, investment positions and portable backups are not implemented yet. Begin with sample data.
+
 A local-first Philippine personal finance desktop app. **This is a tested development milestone, not a complete production release.** The ledger, accounts, manual transactions, monthly budgets, virtual savings earmarks, universal CSV imports and reconciliation work. The remaining release scope is explicit in [STATUS.md](STATUS.md).
 
 ## Run
@@ -48,7 +56,7 @@ npm run tauri build -- --bundles app,dmg -- --locked
 npm run tauri build -- --bundles nsis,msi -- --locked
 ```
 
-Artifacts are written to `src-tauri/target/release/bundle/`. Windows and macOS CI jobs are configured in `.github/workflows/check.yml`. This environment did not build either installer, and CI has not been executed remotely. An unsigned installer is for development, not public distribution.
+Artifacts are written to `src-tauri/target/release/bundle/`. Windows and macOS CI jobs are configured in `.github/workflows/check.yml`. The local Linux environment could not build the native shell. GitHub Actions subsequently built Windows x64 EXE/MSI and a macOS universal DMG successfully in [run 39248617740](https://github.com/2riell/2riel/actions/runs/39248617740); these are published as development preview v0.1.0-dev.2. Native installation has not been manually tested. An unsigned installer is for development, not public distribution.
 
 For public macOS distribution, supply an Apple Developer signing identity and certificate through the CI secret store, configure `APPLE_SIGNING_IDENTITY`, and notarize with an authorized Apple ID/app-specific password/team or Apple API key using the Tauri signing documentation. On Windows, obtain an appropriate Authenticode certificate or trusted signing service, configure Tauri's Windows signing settings and timestamping, and keep private keys outside source control. Tauri updater signing is a separate concern; auto-updates are not enabled. Never commit certificates, passwords or tokens. Platform code-signing and notarization still require setup and validation.
 

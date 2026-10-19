@@ -26,3 +26,9 @@ Browser workflows cover initial account setup, expense entry, editing/deleting w
 Build warnings: upstream Zod PURE annotation comments are ignored by Rollup; the UI bundle is approximately 773 kB / 231 kB gzip before lazy module splitting. These warnings do not fail the frontend build. They remain optimization/maintenance work.
 
 Dependency locks (`package-lock.json`, both Cargo.lock files) are included. The runtime npm audit is a point-in-time known-vulnerability check, not a security assessment; no Rust advisory scan or comprehensive security review was performed. Native release certification remains outstanding.
+
+## Subsequent native release validation
+
+GitHub Actions [run 39248617740](https://github.com/2riell/2riel/actions/runs/39248617740) passed the frontend checks, six Rust SQLCipher tests on each native host, Windows x64 EXE/MSI packaging, macOS universal (Apple silicon + Intel) DMG packaging, artifact upload and release publication. Release [v0.1.0-dev.2](https://github.com/2riell/2riel/releases/tag/v0.1.0-dev.2) was built from f06dab11bfeaccb07425067d771a5b7aa4d759ea. It includes a browser regression verifying that editing a CSV transaction retains its import identity.
+
+This supersedes the initial snapshot's statement that no native packages had been built. Signing/notarization, installation, native UI/keychain smoke tests and recovery testing remain outstanding. The binaries are unsigned development previews.

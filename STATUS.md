@@ -30,7 +30,7 @@
 - Portable encrypted backup/validated restore, app/auto lock, clipboard safeguards and in-app complete deletion.
 - Tray/native menu, OS notifications, undo (deletions use confirmation and audit).
 - Fully shared generated Rust/TypeScript DTOs; the current typed frontend wrapper and runtime validators duplicate boundary definitions.
-- Desktop keychain/webview end-to-end tests; real Windows/macOS compilation/install/run, signing and notarization.
+- Desktop keychain/webview end-to-end tests; manual Windows/macOS installation/run, signing and notarization. Native Windows/macOS compilation and packaging have now passed in GitHub Actions.
 - Full security/accessibility audit, larger-scale performance tests and release hardening.
 
 ## Release limits
