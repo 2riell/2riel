@@ -258,7 +258,8 @@ function App() {
             amount: minor(str("amount")),
             fee: minor(str("fee") || "0"),
             category: str("category"),
-            source: "manual",
+            source: edit?.source ?? "manual",
+            ...(edit?.importKey ? { importKey: edit.importKey } : {}),
           };
           n.entries = edit
             ? n.entries.map((x) => (x.id === edit.id ? entry : x))

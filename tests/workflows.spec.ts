@@ -92,6 +92,9 @@ test("sample navigation, privacy, CSV idempotency, and theme", async ({
   });
   await expect(d.getByRole("button", { name: "Confirm 1 rows" })).toBeEnabled();
   await d.getByRole("button", { name: "Confirm 1 rows" }).click();
+  await page.getByRole("button", { name: "Edit Imported lunch" }).click();
+  await d.getByLabel("Amount (PHP)", { exact: true }).fill("90.00");
+  await d.getByRole("button", { name: "Save transaction" }).click();
   await page.getByRole("button", { name: "Import CSV" }).click();
   await d.locator("input[type=file]").setInputFiles({
     name: "test.csv",
