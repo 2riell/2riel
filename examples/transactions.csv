@@ -1,0 +1,5 @@
+date,description,kind,amount,category
+2026-10-10,Monthly salary,income,65000.00,Salary
+2026-10-11,Groceries,expense,2450.50,Food
+2026-10-12,Bus fare,expense,45.00,Transportation
+2026-10-13,Returned item,refund,250.00,Shopping

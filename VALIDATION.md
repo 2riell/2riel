@@ -1,0 +1,28 @@
+# Observed validation — 19 October 2026
+
+Environment: Debian 13 x86_64, Node 24.19.0, npm 11.9.0. Rust stable 1.99.1 was installed into a workspace-local toolchain during this session. SQLCipher was built from the pinned rusqlite/libsqlite3-sys sources with vendored OpenSSL.
+
+| Check                                                                  | Observed result                                                                                       |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `npm test`                                                             | 13 financial-engine tests passed                                                                      |
+| `cargo test --locked --manifest-path src-tauri/ledger-core/Cargo.toml` | 6 database/encryption tests passed                                                                    |
+| `CHROMIUM_PATH=/usr/bin/chromium npm run test:e2e`                     | 3 Chromium workflow tests passed                                                                      |
+| `npm run build`                                                        | TypeScript strict build and Vite production build passed                                              |
+| `npm run format:check`                                                 | Passed                                                                                                |
+| Rust formatting                                                        | Both desktop and independent core formatted with rustfmt                                              |
+| `npm audit --omit=dev --audit-level=high`                              | 0 known runtime dependency vulnerabilities reported                                                   |
+| Full native `cargo check --manifest-path src-tauri/Cargo.toml`         | Blocked: host lacks GLib/GTK/WebKit development libraries (first failure: glib-sys pkg-config lookup) |
+| Windows/macOS installers, OS keychain/native webview workflows         | Not built or tested here                                                                              |
+| Remote GitHub Actions                                                  | Configured, not run                                                                                   |
+
+The wrong-key encryption test deliberately triggers SQLCipher authentication diagnostics on stderr; the test passes by observing the failure and then reopening successfully with the correct key. No key or user financial information is printed.
+
+Engine tests cover transfer neutrality, fees exactly once, edits/deletes and audit, snapshot immutability, repeat-import idempotency, credit-card charge/repayment accounting, earmarks, signed net worth, rejecting unsupported currencies, cent parsing, refunds, opening cutoffs/self-transfers, invalid dates/IDs and fractional cents. FX conversion and investment cost-basis tests are absent because those features are not implemented.
+
+Database tests cover migration/persistence, conflict rejection, transaction rollback, unique import keys, allocation limits and actual on-disk encryption/correct-key reopening. These exercise the same SQLCipher repository linked by the native app, but do not exercise OS credential storage or native IPC.
+
+Browser workflows cover initial account setup, expense entry, editing/deleting with recalculated balances, sample navigation, monetary privacy, CSV preview/repeat-import detection, theme switching, transfer with fee, snapshot observation without balance overwrite, and confirmed adjustment. Screenshots were inspected for the dark dashboard and light theme. Browser data is memory-only by design.
+
+Build warnings: upstream Zod PURE annotation comments are ignored by Rollup; the UI bundle is approximately 773 kB / 231 kB gzip before lazy module splitting. These warnings do not fail the frontend build. They remain optimization/maintenance work.
+
+Dependency locks (`package-lock.json`, both Cargo.lock files) are included. The runtime npm audit is a point-in-time known-vulnerability check, not a security assessment; no Rust advisory scan or comprehensive security review was performed. Native release certification remains outstanding.

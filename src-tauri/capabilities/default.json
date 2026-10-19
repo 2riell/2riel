@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Main window with core permissions only; no arbitrary file or network access",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

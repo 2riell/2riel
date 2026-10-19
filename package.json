@@ -1,0 +1,39 @@
+{
+  "name": "saldo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build",
+    "test": "vitest run",
+    "tauri": "tauri",
+    "format": "prettier --write src tests *.ts *.json *.md docs .github src-tauri/tauri.conf.json src-tauri/capabilities",
+    "format:check": "prettier --check src tests *.ts *.json *.md docs .github src-tauri/tauri.conf.json src-tauri/capabilities",
+    "test:e2e": "playwright test",
+    "test:rust": "cargo test --locked --manifest-path src-tauri/ledger-core/Cargo.toml"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.10.0",
+    "lucide-react": "^0.577.0",
+    "papaparse": "^5.5.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "recharts": "^3.8.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tauri-apps/cli": "^2.10.0",
+    "@types/papaparse": "^5.5.2",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "prettier": "^3.9.10",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.0",
+    "vitest": "^4.0.18"
+  }
+}
