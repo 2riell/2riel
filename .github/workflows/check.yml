@@ -25,10 +25,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
+          - os: macos-15-intel
             target: universal-apple-darwin
             bundles: app,dmg
-            test_target: aarch64-apple-darwin
+            test_target: x86_64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             bundles: nsis,msi
