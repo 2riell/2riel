@@ -25,8 +25,8 @@
 - CSV column/date mapping, institution statement adapters, account export and duplicate override/review UX. Identical rows within one file currently cause validation to reject the preview; imports remain atomic.
 - Custom-period/rollover budgets and editing existing budget limits; remove/recreate is available.
 - Transfer-backed goal automation and projected completion assumptions.
-- Investment positions/trades/FIFO or average-cost basis, valuations/dividends, performance and allocation charts. The Investments page openly states this. Investment cash accounts work; unimplemented holdings cannot be double-counted.
-- Multi-currency/exchange rates. Non-PHP accounts are rejected rather than combined.
+- Ledger-backed investment trades, sales/FIFO, realized gains, dividends and performance/allocation charts. Informational purchase records, average cost and quoted valuations are available; they do not change ledger cash or net worth.
+- Multi-currency ledger accounts and automatic exchange rates. The ledger remains PHP-only; informational USD holdings support a dated manual USD/PHP estimate.
 - Portable encrypted backup/validated restore, app/auto lock, clipboard safeguards and in-app complete deletion.
 - Tray/native menu, OS notifications, undo (deletions use confirmation and audit).
 - Fully shared generated Rust/TypeScript DTOs; the current typed frontend wrapper and runtime validators duplicate boundary definitions.

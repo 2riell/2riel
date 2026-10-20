@@ -2,11 +2,11 @@
 
 ## Download the development app
 
-- [Windows x64 setup (.exe)](https://github.com/2riell/2riel/releases/download/v0.2.0-dev.4/SALDO_0.2.0_x64-setup.exe)
-- [macOS universal (.dmg), Apple silicon and Intel](https://github.com/2riell/2riel/releases/download/v0.2.0-dev.4/SALDO_0.2.0_universal.dmg)
-- [Release notes and alternative MSI installer](https://github.com/2riell/2riel/releases/tag/v0.2.0-dev.4)
+- [Windows x64 setup (.exe)](https://github.com/2riell/2riel/releases/download/v0.3.0-dev.7/SALDO_0.3.0_x64-setup.exe)
+- [macOS universal (.dmg), Apple silicon and Intel](https://github.com/2riell/2riel/releases/download/v0.3.0-dev.7/SALDO_0.3.0_universal.dmg)
+- [Release notes and alternative MSI installer](https://github.com/2riell/2riel/releases/tag/v0.3.0-dev.7)
 
-Version 0.3 source adds purchase amounts and multiple entry prices per symbol, average cost, seven financial calculators, a refreshed dark/light UI, TradingView chart shortcuts and clearer online refresh status. The download links above currently point to the last verified 0.2 build; the 0.3 installers are being validated. See [calculator assumptions](docs/CALCULATORS.md).
+Version 0.3 adds purchase amounts and multiple entry prices per symbol, average cost, seven financial calculators, a refreshed dark/light UI, TradingView chart shortcuts and clearer online refresh status. Both native packages and the automated checks passed in [run 39428259129](https://github.com/2riell/2riel/actions/runs/39428259129). The published EXE, MSI and DMG were downloaded and verified against their release SHA-256 digests. See [calculator assumptions](docs/CALCULATORS.md).
 
 Version 0.2.0 added optional market quotes. In Investments, add SPY, VOO or IVV, configure your own Finnhub API key, then refresh or opt into 60-second refresh. See [setup and privacy notes](docs/MARKET-DATA.md). Bank/app shortcuts are available; bank login/session integration and balance sync are not.
 

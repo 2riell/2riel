@@ -58,3 +58,11 @@ This supersedes the local-validation note that native 0.2 builds were still pend
 - Responsive layout checks at 1440, 1100, 850 and 600 pixels found no page-level horizontal overflow or browser JavaScript errors in Overview, Calculators or Investments. Dark/light screenshots were inspected.
 
 Seven Chromium workflows pass, including purchase amounts at multiple prices, fee-inclusive cost, correction/removal, unchanged ledger net worth, calculator schedule CSV export, privacy and external TradingView index URL. Target-platform release results are recorded after final validation. Live-provider authentication, native installation/keychain smoke tests, bank synchronization, signing/notarization and recovery testing remain outside the observed checks. TradingView browser workflow tests stub the external destination and verify the index symbol/URL; they do not test TradingView availability or feed entitlement.
+
+## Version 0.3 native release verification — 20 October 2026
+
+GitHub Actions [run 39428259129](https://github.com/2riell/2riel/actions/runs/39428259129) passed frontend validation, 11 SQLCipher and 8 market-adapter tests on each native host, Windows x64 EXE/MSI packaging, macOS universal DMG packaging, artifact upload and release publication. The 38 Vitest tests and 7 Chromium workflows also passed, giving 64 distinct automated checks across the suites. Source commit: `21248e17431ef1ceae1f2c900ead6fad429179a3`. Published release: [v0.3.0-dev.7](https://github.com/2riell/2riel/releases/tag/v0.3.0-dev.7).
+
+An earlier macOS job was never acquired by an ARM runner because of GitHub capacity constraints. The successful release uses the documented `macos-15-intel` runner, executes native tests on x86_64, and compiles both x86_64 and aarch64 app targets into a universal bundle.
+
+All three published installers were downloaded successfully. Their byte counts and SHA-256 hashes matched release metadata; the Windows PE/MSI and DMG file signatures were checked. Native installation, keychain/webview workflows, authenticated provider calls, bank sync, signing/notarization and recovery testing remain unverified or unavailable. These are unsigned development previews.
