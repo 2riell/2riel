@@ -23,6 +23,7 @@ import {
   Download,
   TrendingUp,
   Link2,
+  Calculator,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -60,6 +61,7 @@ import { desktop, load, save } from "./storage";
 import { previewCSV, csvExport } from "./import";
 import Investments from "./Investments";
 import Connections from "./Connections";
+import Calculators from "./Calculators";
 import type { Market } from "./market";
 import "./style.css";
 const nav = [
@@ -70,6 +72,7 @@ const nav = [
   ["Savings", Target],
   ["Investments", TrendingUp],
   ["Analytics", ChartNoAxesCombined],
+  ["Calculators", Calculator],
   ["Connections", Link2],
   ["Settings", Settings],
 ] as const;
@@ -465,7 +468,11 @@ function App() {
             <button
               key={name}
               className={page === name ? "active" : ""}
-              onClick={() => setPage(name)}
+              aria-current={page === name ? "page" : undefined}
+              onClick={() => {
+                setPage(name);
+                window.scrollTo(0, 0);
+              }}
             >
               <Icon size={19} />
               {name}
@@ -558,14 +565,18 @@ function App() {
           )}
           <div className="page-title">
             <div className="min-w-0">
-              <div className="eyebrow">YOUR FINANCIAL COMMAND CENTER</div>
+              <div className="eyebrow">PERSONAL FINANCE, IN FOCUS</div>
               <h1>
                 {page === "Overview" ? "Your money, in perspective." : page}
               </h1>
               <p>
                 {page === "Overview"
                   ? "A clear view of where you are. More confidence in where you’re going."
-                  : "Every detail, working together for your bigger picture."}
+                  : page === "Calculators"
+                    ? "A little planning today. More possibility tomorrow."
+                    : page === "Investments"
+                      ? "Your watchlist, valuations and a clear view of market data."
+                      : "Every detail, working together for your bigger picture."}
               </p>
             </div>
             <button
@@ -579,7 +590,7 @@ function App() {
               <Plus size={17} /> Add transaction
             </button>
           </div>
-          {!s.onboarded && (
+          {!s.onboarded && page !== "Calculators" && (
             <section className="onboarding panel">
               <ShieldCheck size={32} />
               <div>
@@ -594,32 +605,36 @@ function App() {
               </button>
             </section>
           )}
-          <div className="toolbar">
-            <div className="segmented">
-              <button className="selected">Monthly view</button>
-              <span>PHP · Philippine peso</span>
+          {["Overview", "Transactions", "Budgets", "Analytics"].includes(
+            page,
+          ) && (
+            <div className="toolbar">
+              <div className="segmented">
+                <button className="selected">Monthly view</button>
+                <span>PHP · Philippine peso</span>
+              </div>
+              <div className="filters">
+                <select
+                  aria-label="Filter accounts"
+                  value={selected}
+                  onChange={(e) => setSelected(e.target.value)}
+                >
+                  <option value="all">All accounts</option>
+                  {s.accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.institution} · {a.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  aria-label="Selected month"
+                  type="month"
+                  value={month}
+                  onChange={(e) => e.target.value && setMonth(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="filters">
-              <select
-                aria-label="Filter accounts"
-                value={selected}
-                onChange={(e) => setSelected(e.target.value)}
-              >
-                <option value="all">All accounts</option>
-                {s.accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.institution} · {a.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                aria-label="Selected month"
-                type="month"
-                value={month}
-                onChange={(e) => e.target.value && setMonth(e.target.value)}
-              />
-            </div>
-          </div>
+          )}
           {page === "Overview" && (
             <>
               <div className="stats">
@@ -667,6 +682,23 @@ function App() {
                   </section>
                 ))}
               </div>
+              <button
+                className="planning-shortcut"
+                onClick={() => setPage("Calculators")}
+              >
+                <span className="tool-icon">
+                  <Calculator size={20} />
+                </span>
+                <span>
+                  <strong>Your next move starts with a plan.</strong>
+                  <small>
+                    Explore loans, savings, and the milestones ahead.
+                  </small>
+                </span>
+                <span className="planning-link">
+                  Open calculators <ArrowUpRight size={17} />
+                </span>
+              </button>
               <div className="dashboard-grid">
                 <section className="panel chart-panel">
                   <div className="panel-head">
@@ -1100,6 +1132,7 @@ function App() {
               </div>
             </>
           )}
+          {page === "Calculators" && <Calculators hidden={hidden} />}
           {page === "Investments" && (
             <Investments
               market={s.market}
@@ -1265,7 +1298,7 @@ function App() {
                 : "Session-only sample"}{" "}
               · Your money stays yours.
             </span>
-            <span>SALDO / 0.2.0</span>
+            <span>SALDO / 0.3.0</span>
           </footer>
         </div>
       </main>

@@ -48,3 +48,13 @@ No authenticated Finnhub quote, OS-keychain write/read or native external-browse
 GitHub Actions [run 39255617376](https://github.com/2riell/2riel/actions/runs/39255617376) passed frontend tests/build, native SQLCipher and market-adapter tests, Windows x64 EXE/MSI packaging, macOS universal DMG packaging, artifact upload and release publication. Source commit: `53c41b93f7c701319918d41cbcfece7a3c70a882`. Published development release: [v0.2.0-dev.4](https://github.com/2riell/2riel/releases/tag/v0.2.0-dev.4).
 
 This supersedes the local-validation note that native 0.2 builds were still pending. Windows/macOS installation and UI/keychain runtime testing, an authenticated Finnhub call, real bank account-read integration, code signing and notarization remain unverified or unavailable as described above.
+
+## Version 0.3 local validation — 20 October 2026
+
+- 38 Vitest checks pass: existing ledger/valuation invariants plus seven calculator models, exact amortization reconciliation, extra-payment effects, zero-rate/final-payment cases, payoff rejection, rounded-up target contributions, deposit tax arithmetic, purchase amount/unit precision, multiple entry prices and fees, average cost, prior manual position compatibility and refresh eligibility/cooldown.
+- 11 SQLCipher repository tests pass, including schema 1/2 to 3 migration with preserved balances/audits, normalized purchase records, rejection of mismatched purchase totals, no cash movements, and refusal of a future schema.
+- 8 independent Rust market-adapter tests pass, including fixed-host TradingView URL validation.
+- TypeScript strict checks, production build, Prettier and Rust formatting pass. Runtime npm audit reports no known vulnerabilities at this point in time.
+- Responsive layout checks at 1440, 1100, 850 and 600 pixels found no page-level horizontal overflow or browser JavaScript errors in Overview, Calculators or Investments. Dark/light screenshots were inspected.
+
+Seven Chromium workflows pass, including purchase amounts at multiple prices, fee-inclusive cost, correction/removal, unchanged ledger net worth, calculator schedule CSV export, privacy and external TradingView index URL. Target-platform release results are recorded after final validation. Live-provider authentication, native installation/keychain smoke tests, bank synchronization, signing/notarization and recovery testing remain outside the observed checks. TradingView browser workflow tests stub the external destination and verify the index symbol/URL; they do not test TradingView availability or feed entitlement.

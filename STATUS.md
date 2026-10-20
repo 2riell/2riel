@@ -47,3 +47,14 @@ The repository rewrites the normalized projections and JSON document atomically 
 - Schema 2 upgrade preserving existing records, normalized market position projection and migration tests. Provider observations do not duplicate the entire financial audit on each refresh.
 - Connections for GCash, Maya, BPI, MariBank and GoTyme with official resource shortcuts and truthful unavailable sync status. BPI sign-in happens only on BPI's external official site. Bank/wallet authorization, balance read APIs and transaction sync remain unavailable; no partner access has been approved.
 - Full investment trades/FIFO/sales/dividends and ledger-backed positions, streaming tick data and automatic FX are still unfinished. Existing v0.1 notes above describe the earlier milestone and are superseded by these additions.
+
+## Added in 0.3.0
+
+- Per-symbol purchase history with cash-based amounts or exact broker units, multiple buy prices, dates, fees, edits/removal, exact total cost and average cost per unit. Cash-derived quantities are estimates rounded down to six decimals. Realized trades/sales and ledger cash movements remain outside this feature.
+- Schema 3 adds normalized purchase-lot storage, validates derived totals at frontend and native boundaries, preserves prior records and audits financial corrections. Older builds refuse this upgraded schema rather than silently discarding purchase history.
+
+- Modernized slate/mint dark theme and matching light palette, larger typography, rounded cards, planning shortcut and responsive calculator navigation. Global ledger filters only appear where relevant.
+- Seven offline calculators: loan/amortization (down payment, fees, extra payments), loan affordability, credit-card payoff, compound savings growth, target savings contribution, time-deposit net interest and emergency funds. Decimal arithmetic, cent-rounded repayment schedules and numeric CSV export; explicit assumptions, no ledger writes or remote requests. Inputs are temporary and reset when leaving the calculator page.
+- Official TradingView chart shortcuts for the actual S&P 500 index and US watchlist tickers, opened externally with validated fixed-host URLs. No TradingView API key, embedded code, data scraping or access to its browser session. Its chart values do not enter SALDO totals.
+- Price refresh status distinguishes sample/offline/unconfigured/manual/paused/waiting states. Opt-in 60-second polling now starts when eligible and resumes on connectivity/visibility return, with the same native cooldown. Still only while Investments is open and visible; app-wide background or streaming quotes are not implemented.
+- Financial assumptions, withholding and rates are editable examples, not bank offers, tax determinations or market forecasts. Calculator results remain separate from actual balances.

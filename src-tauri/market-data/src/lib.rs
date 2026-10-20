@@ -38,6 +38,19 @@ pub fn valid_symbol(s: &str) -> bool {
     matches!(class, None | Some("A") | Some("B")) && parts.next().is_none()
 }
 
+/// Fixed official destination; no arbitrary URL or query injection from IPC.
+pub fn tradingview_url(symbol: &str) -> Result<String, String> {
+    if symbol == "SP:SPX" {
+        Ok("https://www.tradingview.com/chart/?symbol=SP%3ASPX".into())
+    } else if valid_symbol(symbol) {
+        Ok(format!(
+            "https://www.tradingview.com/chart/?symbol={symbol}"
+        ))
+    } else {
+        Err("Unsupported chart symbol".into())
+    }
+}
+
 pub fn valid_key(key: &str) -> bool {
     (8..=256).contains(&key.len()) && key.bytes().all(|b| b.is_ascii_graphic())
 }
@@ -232,5 +245,29 @@ mod tests {
         assert!(status_error(403).unwrap().contains("coverage"));
         assert!(status_error(429).unwrap().contains("rate limit"));
         assert!(status_error(500).unwrap().contains("500"));
+    }
+}
+
+#[cfg(test)]
+mod chart_tests {
+    #[test]
+    fn official_chart_urls_are_fixed_and_validated() {
+        assert_eq!(
+            super::tradingview_url("SP:SPX").unwrap(),
+            "https://www.tradingview.com/chart/?symbol=SP%3ASPX"
+        );
+        assert_eq!(
+            super::tradingview_url("SPY").unwrap(),
+            "https://www.tradingview.com/chart/?symbol=SPY"
+        );
+        for bad in [
+            "https://evil.example",
+            "SPY&token=secret",
+            "../",
+            "AAPL;cmd",
+            "",
+        ] {
+            assert!(super::tradingview_url(bad).is_err());
+        }
     }
 }

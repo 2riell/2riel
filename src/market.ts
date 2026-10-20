@@ -8,14 +8,100 @@ export const quoteSchema = z.object({
   receivedAt: z.string().datetime(),
   provider: z.enum(["finnhub", "manual"]),
 });
-export const positionSchema = z.object({
-  id: z.string().min(1),
-  symbol: z.string().regex(/^[A-Z][A-Z0-9]{0,9}(?:[.-][AB])?$/),
-  name: z.string().trim().min(1).max(100),
-  unitsMicros: fixed,
-  costBasisUsdMinor: z.number().int().nonnegative().safe().nullable(),
-  quote: quoteSchema.nullable(),
-});
+function validPostedDate(value: string) {
+  return (
+    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    !isNaN(Date.parse(value)) &&
+    new Date(value).toISOString().slice(0, 10) === value &&
+    value <=
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Manila",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date())
+  );
+}
+export const purchaseSchema = z
+  .object({
+    id: z.string().min(1),
+    date: z
+      .string()
+      .refine(
+        validPostedDate,
+        "Use a valid purchase date that is not in the future",
+      ),
+    entryMode: z.enum(["amount", "units"]),
+    priceMicros: fixed.positive(),
+    unitsMicros: fixed.positive(),
+    amountUsdMinor: z
+      .number()
+      .int()
+      .positive()
+      .safe()
+      .max(9_000_000_000_000_000),
+    feeUsdMinor: z
+      .number()
+      .int()
+      .nonnegative()
+      .safe()
+      .max(9_000_000_000_000_000),
+  })
+  .superRefine((lot, ctx) => {
+    try {
+      const expected =
+        lot.entryMode === "amount"
+          ? unitsForAmount(lot.amountUsdMinor, lot.priceMicros)
+          : roundRatio(
+              BigInt(lot.unitsMicros) * BigInt(lot.priceMicros),
+              10_000_000_000n,
+            );
+      if (
+        (lot.entryMode === "amount" ? lot.unitsMicros : lot.amountUsdMinor) !==
+        expected
+      )
+        ctx.addIssue({
+          code: "custom",
+          message: "Purchase amount, price and quantity do not match",
+        });
+    } catch (e) {
+      ctx.addIssue({
+        code: "custom",
+        message: e instanceof Error ? e.message : "Invalid purchase",
+      });
+    }
+  });
+export type Purchase = z.infer<typeof purchaseSchema>;
+export const positionSchema = z
+  .object({
+    id: z.string().min(1),
+    symbol: z.string().regex(/^[A-Z][A-Z0-9]{0,9}(?:[.-][AB])?$/),
+    name: z.string().trim().min(1).max(100),
+    unitsMicros: fixed,
+    costBasisUsdMinor: z.number().int().nonnegative().safe().nullable(),
+    quote: quoteSchema.nullable(),
+    purchases: z.array(purchaseSchema).max(200).default([]),
+  })
+  .superRefine((p, ctx) => {
+    if (!p.purchases.length) return;
+    try {
+      const totals = purchaseTotals(p.purchases);
+      if (
+        new Set(p.purchases.map((l) => l.id)).size !== p.purchases.length ||
+        totals.unitsMicros !== p.unitsMicros ||
+        totals.costBasisUsdMinor !== p.costBasisUsdMinor
+      )
+        ctx.addIssue({
+          code: "custom",
+          message: "Position totals must match its unique purchase records",
+        });
+    } catch (e) {
+      ctx.addIssue({
+        code: "custom",
+        message: e instanceof Error ? e.message : "Invalid purchases",
+      });
+    }
+  });
 export const marketSchema = z
   .object({
     enabled: z.boolean(),
@@ -128,4 +214,82 @@ export function marketTotals(m: Market) {
 export function quoteAge(q: Quote, now = Date.now()) {
   const age = Math.max(0, Math.floor((now - q.timestamp * 1000) / 60000));
   return `${q.provider === "manual" ? "Manual valuation" : age > 15 ? "Stale / market may be closed" : "Provider quote; feed delay not verified"} · ${age} min old`;
+}
+
+export function unitsForAmount(amountUsdMinor: number, priceMicros: number) {
+  if (
+    !Number.isSafeInteger(amountUsdMinor) ||
+    amountUsdMinor <= 0 ||
+    !Number.isSafeInteger(priceMicros) ||
+    priceMicros <= 0
+  )
+    throw Error("Enter a positive purchase amount and price.");
+  const units =
+    (BigInt(amountUsdMinor) * 10_000_000_000n) / BigInt(priceMicros);
+  if (units < 1n || units > 1_000_000_000_000n)
+    throw Error(
+      "Purchase quantity is outside the six-decimal supported range. Use exact broker units instead.",
+    );
+  return Number(units);
+}
+export function purchaseTotals(purchases: Purchase[]) {
+  const units = purchases.reduce((n, l) => n + BigInt(l.unitsMicros), 0n);
+  if (units > 1_000_000_000_000n)
+    throw Error("Combined quantity is too large.");
+  const amount = purchases.reduce((n, l) => n + BigInt(l.amountUsdMinor), 0n);
+  const fees = purchases.reduce((n, l) => n + BigInt(l.feeUsdMinor), 0n);
+  return {
+    unitsMicros: Number(units),
+    amountUsdMinor: checked(amount),
+    feesUsdMinor: checked(fees),
+    costBasisUsdMinor: checked(amount + fees),
+  };
+}
+export function withPurchases(p: Position, purchases: Purchase[]): Position {
+  const totals = purchaseTotals(purchases);
+  return positionSchema.parse({
+    ...p,
+    purchases,
+    unitsMicros: totals.unitsMicros,
+    costBasisUsdMinor: purchases.length ? totals.costBasisUsdMinor : null,
+  });
+}
+export function makePurchase(input: {
+  id: string;
+  date: string;
+  entryMode: "amount" | "units";
+  priceMicros: number;
+  amountOrUnits: number;
+  feeUsdMinor: number;
+}): Purchase {
+  const { id, date, entryMode, priceMicros, amountOrUnits, feeUsdMinor } =
+    input;
+  const unitsMicros =
+    entryMode === "amount"
+      ? unitsForAmount(amountOrUnits, priceMicros)
+      : amountOrUnits;
+  const amountUsdMinor =
+    entryMode === "amount"
+      ? amountOrUnits
+      : roundRatio(BigInt(unitsMicros) * BigInt(priceMicros), 10_000_000_000n);
+  return purchaseSchema.parse({
+    id,
+    date,
+    entryMode,
+    priceMicros,
+    unitsMicros,
+    amountUsdMinor,
+    feeUsdMinor,
+  });
+}
+export function averageCostMicros(p: Position) {
+  if (!p.unitsMicros || p.costBasisUsdMinor === null) return null;
+  try {
+    return roundRatio(
+      BigInt(p.costBasisUsdMinor) * 10_000_000_000n,
+      BigInt(p.unitsMicros),
+    );
+  } catch {
+    return null;
+  }
 }

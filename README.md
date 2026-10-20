@@ -6,11 +6,13 @@
 - [macOS universal (.dmg), Apple silicon and Intel](https://github.com/2riell/2riel/releases/download/v0.2.0-dev.4/SALDO_0.2.0_universal.dmg)
 - [Release notes and alternative MSI installer](https://github.com/2riell/2riel/releases/tag/v0.2.0-dev.4)
 
-Version 0.2.0 adds optional market quotes. In Investments, add SPY, VOO or IVV, configure your own Finnhub API key, then refresh or opt into 60-second refresh. See [setup and privacy notes](docs/MARKET-DATA.md). Bank/app shortcuts are available; bank login/session integration and balance sync are not.
+Version 0.3 source adds purchase amounts and multiple entry prices per symbol, average cost, seven financial calculators, a refreshed dark/light UI, TradingView chart shortcuts and clearer online refresh status. The download links above currently point to the last verified 0.2 build; the 0.3 installers are being validated. See [calculator assumptions](docs/CALCULATORS.md).
 
-These are unsigned development previews. Native packaging and automated checks passed on GitHub runners; installation and OS keychain workflows have not been manually tested. App lock, investment positions and portable backups are not implemented yet. Begin with sample data.
+Version 0.2.0 added optional market quotes. In Investments, add SPY, VOO or IVV, configure your own Finnhub API key, then refresh or opt into 60-second refresh. See [setup and privacy notes](docs/MARKET-DATA.md). Bank/app shortcuts are available; bank login/session integration and balance sync are not.
 
-A local-first Philippine personal finance desktop app. **This is a tested development milestone, not a complete production release.** The ledger, accounts, manual transactions, monthly budgets, virtual savings earmarks, universal CSV imports, reconciliation and informational investment watchlists work. Version 0.2 adds optional Finnhub quotes and official bank/app shortcuts; see [market-data setup and limitations](docs/MARKET-DATA.md). The remaining release scope is explicit in [STATUS.md](STATUS.md).
+These are unsigned development previews. Native packaging and automated checks passed on GitHub runners; installation and OS keychain workflows have not been manually tested. App lock, full investment trade accounting and portable backups are not implemented yet. Begin with sample data.
+
+A local-first Philippine personal finance desktop app. **This is a tested development milestone, not a complete production release.** The ledger, accounts, manual transactions, monthly budgets, virtual savings earmarks, universal CSV imports, reconciliation and informational investment watchlists work. Version 0.3 adds offline planning calculators and TradingView links alongside optional Finnhub quotes and official bank/app shortcuts; see [market-data setup and limitations](docs/MARKET-DATA.md). The remaining release scope is explicit in [STATUS.md](STATUS.md).
 
 ## Run
 
@@ -70,6 +72,9 @@ For public macOS distribution, supply an Apple Developer signing identity and ce
 - CSV: choose an account, upload the universal template, review rows and confirm. Dates must be `YYYY-MM-DD`, amounts in decimal PHP with up to two fractional digits, and kind one of income/expense/refund. Transfer imports and institution-specific mappings are not supported. Repeat identical rows are detected by account/date/description/type/amount/category. Identical legitimate transactions need manual review rather than blindly retrying the file. Import never guesses whether an opening balance already includes a row; choose the opening cutoff carefully. Examples are under `examples/` (their dates may need adjustment to your account opening date).
 - Budgets: category limits for the selected month. Real expenses less refunds count; transfer fees count under Bills, transfers and adjustments do not count.
 - Savings: earmark funds already held in an account; allocations never increase net worth. Release allocations before spending funds that would otherwise become overallocated.
+- Calculators: seven planning tools with editable example inputs, loan/card schedules and CSV export; inputs and results stay local and do not write to the ledger. See [formulas and limits](docs/CALCULATORS.md).
+- Investment purchases: add a ticker, select “Purchases / add buy”, then enter each buy date, price, amount invested (USD) or exact broker units, and separate fees. Units and cost are calculated from all purchases; records can be corrected or removed. Quotes calculate unrealized value while cash ledger balances remain independent.
+- TradingView: open the actual S&P 500 index or a watchlist ticker in your browser without a Finnhub key. Charts are independent of SALDO valuations. TradingView controls feed access and delay.
 - Privacy/theme: header controls hide monetary text and switch light/dark mode for the session. Theme selection is not persisted yet. Exported CSV is plaintext, even with the privacy toggle on.
 
 ## Structure
@@ -81,6 +86,9 @@ src/storage.ts                  Typed Tauri command wrapper; no browser persiste
 src/import.ts                   Universal CSV preview and formula-safe export
 src/connectors.ts               Honest connector capability/consent boundary
 src/main.tsx, style.css          Responsive UI, Tailwind utilities + custom design system
+src/calculators.ts              Decimal planning calculations, exact-cent loan schedules
+src/Calculators.tsx             Seven offline calculators, assumptions and schedule export
+src/quote-refresh.ts            Explicit refresh eligibility and cooldown logic
 src-tauri/src/main.rs            OS keychain bootstrap and IPC commands
 src-tauri/ledger-core/           Independently testable SQLCipher repository
 src-tauri/migrations/001.sql     Schema and constraints

@@ -42,6 +42,57 @@ fn valid_market_symbol(s: &str) -> bool {
     let class = parts.next();
     matches!(class, None | Some("A") | Some("B")) && parts.next().is_none()
 }
+fn validate_purchases(p: &Value) -> Result<(), String> {
+    let Some(value) = p.get("purchases") else {
+        return Ok(());
+    };
+    let lots = value.as_array().ok_or("Invalid purchase records")?;
+    if lots.len() > 200 {
+        return Err("Maximum 200 purchases per symbol".into());
+    }
+    let mut ids = std::collections::HashSet::new();
+    let mut units_total = 0i128;
+    let mut cost_total = 0i128;
+    for lot in lots {
+        let id = text(lot, "id")?;
+        if id.is_empty() || !ids.insert(id) {
+            return Err("Invalid/duplicate purchase ID".into());
+        }
+        date(lot, "date", false)?;
+        let units = integer(lot, "unitsMicros")?;
+        let price = integer(lot, "priceMicros")?;
+        let amount = integer(lot, "amountUsdMinor")?;
+        let fee = integer(lot, "feeUsdMinor")?;
+        if !(1..=1_000_000_000_000).contains(&units)
+            || !(1..=1_000_000_000_000).contains(&price)
+            || amount <= 0
+            || fee < 0
+        {
+            return Err("Invalid purchase amount, quantity, price or fee".into());
+        }
+        let consistent = match text(lot, "entryMode")? {
+            "amount" => units as i128 == amount as i128 * 10_000_000_000 / price as i128,
+            "units" => {
+                amount as i128 == (units as i128 * price as i128 + 5_000_000_000) / 10_000_000_000
+            }
+            _ => false,
+        };
+        if !consistent {
+            return Err("Purchase amount, price and units do not match".into());
+        }
+        units_total += units as i128;
+        cost_total += amount as i128 + fee as i128;
+    }
+    if !lots.is_empty()
+        && (units_total > 1_000_000_000_000
+            || cost_total > 9_000_000_000_000_000
+            || integer(p, "unitsMicros")? as i128 != units_total
+            || integer(p, "costBasisUsdMinor")? as i128 != cost_total)
+    {
+        return Err("Position totals must equal purchase records".into());
+    }
+    Ok(())
+}
 fn market_validate(v: &Value) -> Result<(), String> {
     let Some(m) = v.get("market") else {
         return Ok(());
@@ -66,6 +117,7 @@ fn market_validate(v: &Value) -> Result<(), String> {
         if text(p, "name")?.trim().is_empty() {
             return Err("Position name required".into());
         }
+        validate_purchases(p)?;
         let units = integer(p, "unitsMicros")?;
         if !(0..=1_000_000_000_000).contains(&units) {
             return Err("Invalid position quantity".into());
@@ -278,6 +330,7 @@ pub fn save(db: &mut Connection, json: String, expected_revision: i64) -> Result
         return Err("Invalid onboarding state".into());
     }
     for table in [
+        "purchase_lots",
         "market_positions",
         "entries",
         "goals",
@@ -383,6 +436,24 @@ pub fn save(db: &mut Connection, json: String, expected_revision: i64) -> Result
                 ],
             )
             .map_err(err)?;
+            if let Some(lots) = p["purchases"].as_array() {
+                for lot in lots {
+                    tx.execute(
+                        "INSERT INTO purchase_lots VALUES(?1,?2,?3,?4,?5,?6,?7,?8)",
+                        params![
+                            text(p, "id")?,
+                            text(lot, "id")?,
+                            text(lot, "date")?,
+                            text(lot, "entryMode")?,
+                            integer(lot, "priceMicros")?,
+                            integer(lot, "unitsMicros")?,
+                            integer(lot, "amountUsdMinor")?,
+                            integer(lot, "feeUsdMinor")?
+                        ],
+                    )
+                    .map_err(err)?;
+                }
+            }
         }
     }
     let over:i64=tx.query_row("SELECT count(*) FROM (SELECT g.account_id,sum(g.allocated) AS reserved FROM goals g GROUP BY g.account_id) x JOIN accounts a ON a.id=x.account_id WHERE reserved > max(0,a.opening+coalesce((SELECT sum(CASE WHEN e.account_id=a.id THEN (CASE WHEN e.kind IN ('expense','transfer') THEN -e.amount ELSE e.amount END)-e.fee ELSE 0 END + CASE WHEN e.kind='transfer' AND e.destination_id=a.id THEN e.amount ELSE 0 END) FROM entries e WHERE e.account_id=a.id OR e.destination_id=a.id),0))",[],|r|r.get(0)).map_err(err)?;
@@ -418,7 +489,7 @@ pub fn open(path: impl AsRef<std::path::Path>, key: &str) -> Result<Connection, 
     let version: i64 = db
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .map_err(err)?;
-    if version > 2 {
+    if version > 3 {
         return Err("Database was created by a newer SALDO version".into());
     }
     if version == 0 {
@@ -433,6 +504,14 @@ pub fn open(path: impl AsRef<std::path::Path>, key: &str) -> Result<Connection, 
         db.execute_batch(concat!(
             "BEGIN IMMEDIATE;",
             include_str!("../../migrations/002.sql"),
+            "COMMIT;"
+        ))
+        .map_err(err)?;
+    }
+    if version < 3 {
+        db.execute_batch(concat!(
+            "BEGIN IMMEDIATE;",
+            include_str!("../../migrations/003.sql"),
             "COMMIT;"
         ))
         .map_err(err)?;
@@ -542,14 +621,16 @@ mod tests {
         {
             let mut db = open(&path, &key).unwrap();
             save(&mut db, state().to_string(), 0).unwrap();
-            db.execute_batch("DROP TABLE market_positions; PRAGMA user_version=1;")
-                .unwrap();
+            db.execute_batch(
+                "DROP TABLE purchase_lots; DROP TABLE market_positions; PRAGMA user_version=1;",
+            )
+            .unwrap();
         }
         let db = open(&path, &key).unwrap();
         let version: i64 = db
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
         let accounts: i64 = db
             .query_row("SELECT count(*) FROM accounts", [], |r| r.get(0))
             .unwrap();
@@ -600,5 +681,95 @@ mod tests {
             .query_row("SELECT count(*) FROM audit", [], |r| r.get(0))
             .unwrap();
         assert_eq!(count, 2);
+    }
+    #[test]
+    fn purchase_records_reconcile_and_persist_without_cash_movements() {
+        let mut db = memory();
+        let mut s = state();
+        let lot = json!({"id":"lot","date":"2026-01-01","entryMode":"amount","priceMicros":500000000,"unitsMicros":2000000,"amountUsdMinor":100000,"feeUsdMinor":100});
+        s["market"] = json!({"enabled":false,"autoRefresh":false,"positions":[{"id":"p","symbol":"SPY","name":"ETF","unitsMicros":2000000,"costBasisUsdMinor":100100,"purchases":[lot],"quote":null}],"fx":null});
+        save(&mut db, s.to_string(), 0).unwrap();
+        let stored: (i64, i64) = db
+            .query_row(
+                "SELECT amount_usd_minor,units_micros FROM purchase_lots",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(stored, (100000, 2000000));
+        assert_eq!(
+            db.query_row("SELECT sum(opening) FROM accounts", [], |r| r
+                .get::<_, i64>(0))
+                .unwrap(),
+            10000
+        );
+        assert_eq!(
+            db.query_row("SELECT count(*) FROM entries", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+        for field in ["costBasisUsdMinor", "unitsMicros"] {
+            let mut bad = s.clone();
+            bad["revision"] = json!(2);
+            bad["market"]["positions"][0][field] = json!(1);
+            assert!(save(&mut db, bad.to_string(), 1).is_err());
+        }
+        let mut bad = s.clone();
+        bad["revision"] = json!(2);
+        bad["market"]["positions"][0]["purchases"][0]["priceMicros"] = json!(123);
+        assert!(save(&mut db, bad.to_string(), 1).is_err());
+        assert_eq!(
+            db.query_row("SELECT count(*) FROM purchase_lots", [], |r| r
+                .get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+        s["revision"] = json!(2);
+        s["market"]["positions"][0]["purchases"][0]["date"] = json!("2026-01-02");
+        save(&mut db, s.to_string(), 1).unwrap();
+        assert_eq!(
+            db.query_row("SELECT count(*) FROM audit", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            2
+        );
+    }
+    #[test]
+    fn migrates_v2_preserving_positions_and_rejects_newer_schema() {
+        let path = std::env::temp_dir().join(format!(
+            "saldo-v2-{}-{}.db",
+            std::process::id(),
+            chrono::Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        let key = "12".repeat(32);
+        {
+            let mut db = open(&path, &key).unwrap();
+            let mut s = state();
+            s["market"] = json!({"enabled":false,"autoRefresh":false,"positions":[{"id":"p","symbol":"SPY","name":"ETF","unitsMicros":500000,"costBasisUsdMinor":5000,"quote":null}],"fx":null});
+            save(&mut db, s.to_string(), 0).unwrap();
+            db.execute_batch("DROP TABLE purchase_lots; PRAGMA user_version=2;")
+                .unwrap();
+        }
+        {
+            let db = open(&path, &key).unwrap();
+            assert_eq!(
+                db.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
+                    .unwrap(),
+                3
+            );
+            assert_eq!(
+                db.query_row("SELECT units_micros FROM market_positions", [], |r| r
+                    .get::<_, i64>(0))
+                    .unwrap(),
+                500000
+            );
+            assert_eq!(
+                db.query_row("SELECT count(*) FROM audit", [], |r| r.get::<_, i64>(0))
+                    .unwrap(),
+                1
+            );
+            db.execute_batch("PRAGMA user_version=4;").unwrap();
+        }
+        assert!(open(&path, &key).is_err());
+        std::fs::remove_file(path).unwrap();
     }
 }

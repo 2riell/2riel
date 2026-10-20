@@ -18,12 +18,19 @@ import {
   marketTotals,
   toPhp,
   quoteAge,
+  withPurchases,
+  averageCostMicros,
+  type Purchase,
   type Market,
   type Quote,
   type Position,
 } from "./market";
 import { minor, today, id } from "./engine";
 import { z } from "zod";
+import PurchaseHistory from "./PurchaseHistory";
+import { refreshEligibility } from "./quote-refresh";
+// Survives navigating away and back; the native boundary also enforces this limit.
+let lastAttemptAt = 0;
 const batchSchema = z.object({
   quotes: z.array(quoteSchema),
   errors: z.array(z.object({ symbol: z.string(), message: z.string() })),
@@ -55,7 +62,11 @@ export default function Investments({
     [apiKey, setApiKey] = useState(""),
     [consent, setConsent] = useState(false),
     [showForm, setShowForm] = useState(false),
-    [editing, setEditing] = useState<Position | null>(null);
+    [editing, setEditing] = useState<Position | null>(null),
+    [purchaseId, setPurchaseId] = useState<string | null>(null),
+    [now, setNow] = useState(Date.now()),
+    [online, setOnline] = useState(navigator.onLine),
+    [visible, setVisible] = useState(document.visibilityState === "visible");
   const latest = useRef(market),
     inflight = useRef(false),
     active = useRef(true);
@@ -85,8 +96,23 @@ export default function Investments({
     }
     return saved;
   }
+  const readiness = refreshEligibility({
+    desktop,
+    sample,
+    enabled: market.enabled,
+    hasKey,
+    positions: market.positions.length,
+    online,
+    visible,
+    autoRefresh: market.autoRefresh,
+    working,
+    lastAttempt: lastAttemptAt,
+    now,
+  });
   async function refresh() {
-    if (inflight.current || !desktop || sample) return;
+    if (inflight.current || !readiness.manualReady || !navigator.onLine) return;
+    lastAttemptAt = Date.now();
+    setNow(lastAttemptAt);
     inflight.current = true;
     setWorking(true);
     setError("");
@@ -114,13 +140,39 @@ export default function Investments({
       if (active.current) setWorking(false);
     }
   }
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
   useEffect(() => {
-    if (!market.enabled || !market.autoRefresh || sample || !desktop) return;
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible") void refresh();
-    }, 60_000);
-    return () => clearInterval(timer);
-  }, [market.enabled, market.autoRefresh, sample]);
+    const tick = () => {
+      setNow(Date.now());
+      setOnline(navigator.onLine);
+      setVisible(document.visibilityState === "visible");
+    };
+    const timer = window.setInterval(tick, 1000);
+    window.addEventListener("online", tick);
+    window.addEventListener("offline", tick);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("online", tick);
+      window.removeEventListener("offline", tick);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, []);
+  useEffect(() => {
+    if (readiness.autoReady) void refreshRef.current();
+  }, [now, readiness.autoReady]);
+  async function tradingView(symbol = "SP:SPX") {
+    try {
+      await openResource(
+        "tradingview:" + symbol,
+        "https://www.tradingview.com/chart/?symbol=" +
+          encodeURIComponent(symbol),
+      );
+    } catch (e) {
+      setError(String(e));
+    }
+  }
   async function configure(e: FormEvent) {
     e.preventDefault();
     setWorking(true);
@@ -165,8 +217,15 @@ export default function Investments({
         id: editing?.id || id(),
         symbol: get("symbol").toUpperCase(),
         name: get("name"),
-        unitsMicros: scaled(get("units")),
-        costBasisUsdMinor: get("cost") ? minor(get("cost")) : null,
+        unitsMicros: editing?.purchases.length
+          ? editing.unitsMicros
+          : scaled(get("units")),
+        costBasisUsdMinor: editing?.purchases.length
+          ? editing.costBasisUsdMinor
+          : get("cost")
+            ? minor(get("cost"))
+            : null,
+        purchases: editing?.purchases ?? [],
         quote: editing?.quote ?? null,
       };
       if (editing?.symbol !== p.symbol) p.quote = null;
@@ -224,6 +283,25 @@ export default function Investments({
     }
   }
   const totals = marketTotals(market);
+  const status =
+    sample || !desktop
+      ? "Sample workspace · network prices off"
+      : !online
+        ? "Device offline · cached prices retained"
+        : !market.enabled || !hasKey
+          ? "Automatic prices off · optional provider setup below"
+          : !market.positions.length
+            ? "Add a ticker to start tracking"
+            : working
+              ? "Requesting provider prices…"
+              : !market.autoRefresh
+                ? "Manual refresh · automatic refresh is off"
+                : !visible
+                  ? "Automatic refresh paused while this page is hidden"
+                  : readiness.wait > 0
+                    ? `Next price check in ${readiness.wait}s`
+                    : "Automatic refresh ready";
+
   return (
     <div className="investment-module">
       <section className="panel investment-intro">
@@ -235,9 +313,10 @@ export default function Investments({
             ETF prices are not the S&P 500 index level.
           </p>
           <p>
-            Informational positions are excluded from SALDO net worth. They do
-            not buy/sell assets or move investment cash. Trade accounting and
-            realized gains are not implemented.
+            Record each purchase amount and price to track units, average cost
+            and unrealized gain. These holdings are informational and excluded
+            from SALDO net worth; recording a purchase does not move ledger
+            cash. Sales and realized gains are not implemented.
           </p>
         </div>
         <button
@@ -250,6 +329,41 @@ export default function Investments({
         >
           <Plus size={16} /> Add ticker
         </button>
+      </section>
+      <section className="panel tradingview-card">
+        <div>
+          <span className="eyebrow">TRADINGVIEW CHARTS</span>
+          <h2>The market view you know.</h2>
+          <p>
+            Open the actual S&P 500 index chart or a ticker chart on TradingView
+            in your browser. No Finnhub key is needed to view these charts.
+            TradingView controls data access and delays; chart prices do not
+            update SALDO position values.
+          </p>
+        </div>
+        <button onClick={() => void tradingView()}>
+          <ExternalLink size={15} /> S&P 500 on TradingView
+        </button>
+      </section>
+      <section
+        className="panel market-status"
+        aria-label="Price refresh status"
+      >
+        <div>
+          <strong>
+            <span className="status-dot" />
+            {status}
+          </strong>
+          <small>
+            Opt-in checks run every 60 seconds while Investments is visible.
+            Reconnecting resumes checks when eligible. Closing the app stops
+            them.
+          </small>
+          <small>
+            Device connectivity does not confirm provider access. Feed delays
+            depend on your plan; each quote keeps its market timestamp.
+          </small>
+        </div>
       </section>
       {error && (
         <div className="alert" role="alert">
@@ -306,6 +420,7 @@ export default function Investments({
               <input
                 required
                 name="symbol"
+                readOnly={Boolean(editing?.purchases.length)}
                 defaultValue={editing?.symbol || ""}
                 placeholder="SPY, VOO, IVV, AAPL"
                 pattern="[A-Za-z][A-Za-z0-9]{0,9}(?:[.\-][ABab])?"
@@ -326,6 +441,7 @@ export default function Investments({
               <input
                 required
                 name="units"
+                readOnly={Boolean(editing?.purchases.length)}
                 defaultValue={editing ? unscale(editing.unitsMicros) : "0"}
               />
             </label>
@@ -333,6 +449,7 @@ export default function Investments({
               Optional total cost basis (USD)
               <input
                 name="cost"
+                readOnly={Boolean(editing?.purchases.length)}
                 defaultValue={
                   editing?.costBasisUsdMinor !== null &&
                   editing?.costBasisUsdMinor !== undefined
@@ -341,6 +458,12 @@ export default function Investments({
                 }
               />
             </label>
+            {Boolean(editing?.purchases.length) && (
+              <small>
+                Units and cost are calculated from purchase history. Edit the
+                purchase records to change them.
+              </small>
+            )}
             <div className="row-actions">
               <button className="primary" type="submit">
                 Save ticker
@@ -363,14 +486,7 @@ export default function Investments({
           </div>
           <button
             onClick={() => void refresh()}
-            disabled={
-              working ||
-              sample ||
-              !desktop ||
-              !market.enabled ||
-              !hasKey ||
-              !market.positions.length
-            }
+            disabled={!readiness.manualReady}
           >
             <RefreshCw size={15} />
             {working ? "Refreshing…" : "Refresh prices"}
@@ -382,6 +498,7 @@ export default function Investments({
               <tr>
                 <th>Ticker / source time</th>
                 <th>Units</th>
+                <th className="right">Invested / average cost</th>
                 <th className="right">USD unit price</th>
                 <th className="right">Value / unrealized gain</th>
                 <th>Actions</th>
@@ -415,6 +532,21 @@ export default function Investments({
                     </td>
                     <td>{hidden ? "•••" : unscale(p.unitsMicros)}</td>
                     <td className="right mono">
+                      {p.costBasisUsdMinor === null
+                        ? "Cost not entered"
+                        : display(p.costBasisUsdMinor)}
+                      <small>
+                        {averageCostMicros(p) === null
+                          ? "No average cost"
+                          : `${hidden ? "USD •••" : "$" + unscale(averageCostMicros(p)!)} avg/unit incl. fees`}
+                      </small>
+                      <small>
+                        {p.purchases.length
+                          ? `${p.purchases.length} purchase(s)`
+                          : "Manual totals"}
+                      </small>
+                    </td>
+                    <td className="right mono">
                       {p.quote
                         ? hidden
                           ? "USD •••"
@@ -429,7 +561,10 @@ export default function Investments({
                       {value === null ? "Unpriced" : display(value)}
                       {gain !== null && (
                         <small className={gain >= 0 ? "positive" : "danger"}>
-                          {display(gain)} unrealized · manual cost basis
+                          {display(gain)} unrealized ·{" "}
+                          {p.purchases.length
+                            ? "purchase cost"
+                            : "manual cost basis"}
                         </small>
                       )}
                       {value !== null && market.fx && (
@@ -443,11 +578,33 @@ export default function Investments({
                         <button
                           className="text"
                           onClick={() => {
+                            setPurchaseId(p.id);
+                            requestAnimationFrame(() =>
+                              document
+                                .getElementById("purchase-history")
+                                ?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "start",
+                                }),
+                            );
+                          }}
+                        >
+                          Purchases / add buy
+                        </button>
+                        <button
+                          className="text"
+                          onClick={() => {
                             setEditing(p);
                             setShowForm(true);
                           }}
                         >
                           Edit
+                        </button>
+                        <button
+                          className="text"
+                          onClick={() => void tradingView(p.symbol)}
+                        >
+                          <ExternalLink size={13} /> TradingView
                         </button>
                         <button className="text" onClick={() => manual(p)}>
                           Manual price
@@ -489,6 +646,30 @@ export default function Investments({
           )}
         </div>
       </section>
+      {purchaseId && market.positions.some((p) => p.id === purchaseId) && (
+        <PurchaseHistory
+          key={purchaseId}
+          position={market.positions.find((p) => p.id === purchaseId)!}
+          hidden={hidden}
+          onClose={() => setPurchaseId(null)}
+          onSave={async (purchases: Purchase[]) => {
+            const current = latest.current.positions.find(
+              (p) => p.id === purchaseId,
+            );
+            if (!current) return false;
+            const changed = withPurchases(current, purchases);
+            return update(
+              {
+                ...latest.current,
+                positions: latest.current.positions.map((p) =>
+                  p.id === purchaseId ? changed : p,
+                ),
+              },
+              "Purchase history updated",
+            );
+          }}
+        />
+      )}
       <div className="dashboard-grid">
         <section className="panel investment-form">
           <h2>Market-data connection</h2>

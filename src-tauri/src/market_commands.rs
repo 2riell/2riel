@@ -84,11 +84,23 @@ pub async fn refresh_market_quotes(
 }
 #[tauri::command]
 pub fn open_official_resource(resource: String) -> Result<(), String> {
-    let url=match resource.as_str(){"finnhub"=>"https://finnhub.io/register","GCash"=>"https://help.gcash.com/hc/en-us/articles/41329110227737-Are-there-other-ways-to-log-in-to-GCash","Maya"=>"https://www.maya.ph/","BPI"=>"https://online.bpi.com.ph/","MariBank"=>"https://www.maribank.ph/","GoTyme"=>"https://www.gotyme.com.ph/help/your-account/opening-a-gotyme-bank-account/downloading-the-app",_=>return Err("Unknown official resource".into())};
+    let url = if let Some(symbol) = resource.strip_prefix("tradingview:") {
+        saldo_market::tradingview_url(symbol)?
+    } else {
+        match resource.as_str() {
+            "finnhub" => "https://finnhub.io/register",
+            "GCash" => "https://help.gcash.com/hc/en-us/articles/41329110227737-Are-there-other-ways-to-log-in-to-GCash",
+            "Maya" => "https://www.maya.ph/",
+            "BPI" => "https://online.bpi.com.ph/",
+            "MariBank" => "https://www.maribank.ph/",
+            "GoTyme" => "https://www.gotyme.com.ph/help/your-account/opening-a-gotyme-bank-account/downloading-the-app",
+            _ => return Err("Unknown official resource".into()),
+        }.to_owned()
+    };
     #[cfg(target_os = "windows")]
     {
         std::process::Command::new("rundll32.exe")
-            .args(["url.dll,FileProtocolHandler", url])
+            .args(["url.dll,FileProtocolHandler", &url])
             .spawn()
             .map_err(|_| "Could not open your browser")?;
     }
