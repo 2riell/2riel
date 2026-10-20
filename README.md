@@ -87,7 +87,7 @@ src/import.ts                   Universal CSV preview and formula-safe export
 src/connectors.ts               Honest connector capability/consent boundary
 src/main.tsx, style.css          Responsive UI, Tailwind utilities + custom design system
 src/calculators.ts              Decimal planning calculations, exact-cent loan schedules
-src/Calculators.tsx             Seven offline calculators, assumptions and schedule export
+src/FinanceTools.tsx             Seven offline calculators, assumptions and schedule export
 src/quote-refresh.ts            Explicit refresh eligibility and cooldown logic
 src-tauri/src/main.rs            OS keychain bootstrap and IPC commands
 src-tauri/ledger-core/           Independently testable SQLCipher repository

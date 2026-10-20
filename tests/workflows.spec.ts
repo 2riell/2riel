@@ -342,6 +342,11 @@ test("per-symbol purchase amounts, multiple prices, corrections and unrealized v
     .getByRole("button", { name: "Save purchase", exact: true })
     .click();
   await expect(history.locator("tbody tr")).toHaveCount(1);
+  // Keep a ticker edit open while another purchase is saved: name edits must not restore stale lots.
+  const tickerPanel = page.locator(".investment-module > .panel").filter({
+    has: page.getByRole("heading", { name: "Your watchlist & positions" }),
+  });
+  await tickerPanel.getByRole("button", { name: "Edit", exact: true }).click();
   await history.getByLabel("Purchase date").fill("2026-01-02");
   await history.getByLabel("Purchase price per unit (USD)").fill("550");
   await history.getByLabel("Amount invested before fees (USD)").fill("1100");
@@ -349,6 +354,8 @@ test("per-symbol purchase amounts, multiple prices, corrections and unrealized v
   await history
     .getByRole("button", { name: "Save purchase", exact: true })
     .click();
+  await expect(history.locator("tbody tr")).toHaveCount(2);
+  await page.getByRole("button", { name: "Save ticker", exact: true }).click();
   await expect(history.locator("tbody tr")).toHaveCount(2);
   const holdings = page.locator(".investment-module > .panel").filter({
     has: page.getByRole("heading", { name: "Your watchlist & positions" }),

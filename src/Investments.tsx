@@ -213,22 +213,34 @@ export default function Investments({
     try {
       const f = new FormData(e.currentTarget),
         get = (k: string) => String(f.get(k) || "").trim();
+      const prior = editing
+        ? latest.current.positions.find((p) => p.id === editing.id)
+        : undefined;
+      if (editing && !prior)
+        throw Error("This ticker was removed. Close the form and try again.");
+      if (
+        prior?.purchases.length &&
+        get("symbol").toUpperCase() !== prior.symbol
+      )
+        throw Error(
+          "A ticker with purchase records cannot be renamed to a different symbol.",
+        );
       const p: Position = {
-        id: editing?.id || id(),
+        id: prior?.id || id(),
         symbol: get("symbol").toUpperCase(),
         name: get("name"),
-        unitsMicros: editing?.purchases.length
-          ? editing.unitsMicros
+        unitsMicros: prior?.purchases.length
+          ? prior.unitsMicros
           : scaled(get("units")),
-        costBasisUsdMinor: editing?.purchases.length
-          ? editing.costBasisUsdMinor
+        costBasisUsdMinor: prior?.purchases.length
+          ? prior.costBasisUsdMinor
           : get("cost")
             ? minor(get("cost"))
             : null,
-        purchases: editing?.purchases ?? [],
-        quote: editing?.quote ?? null,
+        purchases: prior?.purchases ?? [],
+        quote: prior?.quote ?? null,
       };
-      if (editing?.symbol !== p.symbol) p.quote = null;
+      if (prior?.symbol !== p.symbol) p.quote = null;
       const m = {
         ...latest.current,
         positions: editing

@@ -61,7 +61,7 @@ import { desktop, load, save } from "./storage";
 import { previewCSV, csvExport } from "./import";
 import Investments from "./Investments";
 import Connections from "./Connections";
-import Calculators from "./Calculators";
+import Calculators from "./FinanceTools";
 import type { Market } from "./market";
 import "./style.css";
 const nav = [
