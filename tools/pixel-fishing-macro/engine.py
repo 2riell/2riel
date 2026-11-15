@@ -14,6 +14,10 @@ class Profile:
     minutes: float = 10
     dry_run: bool = True
     visual: bool = False
+    auto_cast: bool = True
+    cast_x: int = -1
+    cast_y: int = -1
+    visual_timeout: float = 60
     pixel: bool = False
     x: int = 0
     y: int = 0
@@ -21,10 +25,12 @@ class Profile:
     tolerance: int = 25
 
     def validate(self):
-        for field, low, high in [('hold', .02, 2), ('countdown', 1, 60), ('bite_wait', .1, 120), ('cooldown', .1, 120), ('minutes', .01, 120)]:
+        for field, low, high in [('hold', .02, 2), ('countdown', 1, 60), ('bite_wait', .1, 120), ('cooldown', .1, 120), ('minutes', .01, 120), ('visual_timeout', 5, 120)]:
             value = float(getattr(self, field))
             if not low <= value <= high:
                 raise ValueError(f'{field} must be between {low} and {high}')
+        if self.visual and self.auto_cast and not (0 <= self.cast_x < 1920 and 0 <= self.cast_y < 1080):
+            raise ValueError('Pick a cast point inside the 1920×1080 game view first')
         if not 1 <= self.cycles <= 10000:
             raise ValueError('Cycles must be 1–10000')
         if not 0 <= self.tolerance <= 255:

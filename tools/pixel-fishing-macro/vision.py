@@ -110,7 +110,7 @@ def focused_game():
 
 
 def run_visual(p, stop, emit, backend):
-    """Manual cast, automatic strike and feedback steering; never guesses catches."""
+    """Optional coordinate cast, automatic strike and steering for one round."""
     detector = Detector()
     deadline = time.monotonic() + p.minutes*60
     held = None
@@ -119,6 +119,8 @@ def run_visual(p, stop, emit, backend):
     last_seen = time.monotonic()
     strike_cleared = True
     strikes = 0
+    cast_sent = False
+    cast_time = None
 
     def release():
         nonlocal held
@@ -133,7 +135,7 @@ def run_visual(p, stop, emit, backend):
                 held = None
 
     try:
-        emit('state', 'Visual assist: focus Pixel Worlds and cast manually')
+        emit('state', 'Focus Pixel Worlds — casting after countdown' if p.auto_cast else 'Visual assist: focus Pixel Worlds and cast manually')
         if stop.wait(p.countdown):
             return
         while not stop.is_set() and time.monotonic() < deadline and completed < p.cycles:
@@ -151,6 +153,38 @@ def run_visual(p, stop, emit, backend):
                 release()
                 continue
             now = time.monotonic()
+            if p.auto_cast and not cast_sent and state == 'waiting':
+                # Attach to a strike/minigame already in progress without clicking.
+                if obs.strike or obs.bar is not None:
+                    cast_sent = True
+                else:
+                    if not (0 <= p.cast_x < 1920 and 0 <= p.cast_y < 1080):
+                        raise ValueError('Pick a valid cast point before starting')
+                    if not p.dry_run:
+                        if not focused_game() or stop.is_set() or time.monotonic() >= deadline:
+                            continue
+                        backend.moveTo(p.cast_x, p.cast_y)
+                        # Moving the pointer can take time; recheck focus before click.
+                        if not focused_game() or stop.is_set():
+                            continue
+                        try:
+                            backend.mouseDown(button='left')
+                            stop.wait(.06)
+                        finally:
+                            previous = backend.FAILSAFE
+                            try:
+                                backend.FAILSAFE = False
+                                backend.mouseUp(button='left')
+                            finally:
+                                backend.FAILSAFE = previous
+                    cast_sent = True
+                    cast_time = now
+                    emit('action', ('DRY ' if p.dry_run else '') + f'cast click at ({p.cast_x}, {p.cast_y})')
+                    emit('state', 'Waiting for STRIKE (dry run: cast manually)' if p.dry_run else 'Cast clicked — waiting for STRIKE')
+                    continue
+            if cast_time is not None and state == 'waiting' and now-cast_time > p.visual_timeout:
+                emit('timeout', 'No strike after casting — check cast point; no repeated clicks sent')
+                break
             if not obs.strike:
                 strike_cleared = True
             if obs.bar is not None and obs.fish_x is not None and obs.target_x is not None:

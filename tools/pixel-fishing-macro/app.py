@@ -14,7 +14,7 @@ class App:
     def __init__(self, root):
         self.root = root
         root.title('Pixel Worlds • Fishing Lab')
-        root.geometry('880x840')
+        root.geometry('900x940')
         root.minsize(740, 700)
         self.queue = queue.Queue()
         self.stop_event = threading.Event()
@@ -38,7 +38,7 @@ class App:
         grid = ttk.Frame(shell)
         grid.pack(fill='x')
         defaults = Profile()
-        fields = [('cast','Cast action'), ('reel','Reel action'), ('hold','Key hold (seconds)'), ('countdown','Focus countdown (seconds)'), ('bite_wait','Bite wait / timeout (seconds)'), ('cooldown','Cooldown (seconds)'), ('cycles','Maximum cycles'), ('minutes','Session limit (minutes)'), ('x','Bite pixel X'), ('y','Bite pixel Y'), ('color','Bite color (#RRGGBB)'), ('tolerance','RGB tolerance (0–255)')]
+        fields = [('cast_x','Cast click X'), ('cast_y','Cast click Y'), ('visual_timeout','Strike timeout (seconds)'), ('cast','Cast key (timed mode)'), ('reel','Reel action'), ('hold','Key hold (seconds)'), ('countdown','Focus countdown (seconds)'), ('bite_wait','Bite wait / timeout (seconds)'), ('cooldown','Cooldown (seconds)'), ('cycles','Maximum cycles'), ('minutes','Session limit (minutes)'), ('x','Bite pixel X'), ('y','Bite pixel Y'), ('color','Bite color (#RRGGBB)'), ('tolerance','RGB tolerance (0–255)')]
         for i, (key, label) in enumerate(fields):
             col = (i % 2) * 2
             row = i // 2
@@ -46,7 +46,7 @@ class App:
             var = tk.StringVar(value=str(getattr(defaults, key)))
             self.vars[key] = var
             ttk.Entry(grid, textvariable=var, width=15).grid(row=row, column=col+1, sticky='ew', padx=(0, 18), pady=6)
-        for key, label in [('visual', 'Visual assist (Windows, 1920×1080, maximum zoom; cast manually)'), ('dry_run', 'Dry run — observe/simulate without game input'), ('pixel', 'Detect fresh bite color (live mode only)')]:
+        for key, label in [('visual', 'Visual assist (Windows, 1920×1080, maximum zoom)'), ('auto_cast', 'Automatically left-click the saved cast point (visual mode)'), ('dry_run', 'Dry run — observe/simulate without game input'), ('pixel', 'Detect fresh bite color (live mode only)')]:
             var = tk.BooleanVar(value=getattr(defaults, key))
             self.vars[key] = var
             ttk.Checkbutton(shell, text=label, variable=var).pack(anchor='w', pady=5)
@@ -57,6 +57,7 @@ class App:
         self.start_button.pack(side='left')
         ttk.Button(bar, text='■ STOP / F8', command=self.stop).pack(side='left', padx=8)
         ttk.Button(bar, text='Sample pixel in 3s', command=self.sample).pack(side='left')
+        ttk.Button(bar, text='Pick cast point in 3s', command=self.pick_cast).pack(side='left', padx=8)
         bar2 = ttk.Frame(shell)
         bar2.pack(fill='x', pady=(0, 12))
         for title, callback in [('Load profile',self.load), ('Save profile',self.save), ('Export CSV',self.export)]:
@@ -70,9 +71,9 @@ class App:
 
     def profile(self):
         values = {k:v.get() for k,v in self.vars.items()}
-        for key in ('hold','countdown','bite_wait','cooldown','minutes'):
+        for key in ('hold','countdown','bite_wait','cooldown','minutes','visual_timeout'):
             values[key] = float(values[key])
-        for key in ('cycles','x','y','tolerance'):
+        for key in ('cycles','x','y','tolerance','cast_x','cast_y'):
             values[key] = int(values[key])
         return Profile(**values).validate()
 
@@ -95,7 +96,7 @@ class App:
                 from pynput import keyboard
                 backend.FAILSAFE = True
                 backend.PAUSE = .03
-                if p.pixel:
+                if p.pixel and not p.visual:
                     if not backend.onScreen(p.x, p.y):
                         raise ValueError('Bite pixel must be on the primary display')
                     backend.pixel(p.x, p.y)  # Check screen access before countdown.
@@ -134,6 +135,27 @@ class App:
                     self.listener.stop()
                     self.listener = None
         self.root.after(100, self.poll)
+
+    def pick_cast(self):
+        if self.worker and self.worker.is_alive():
+            messagebox.showinfo('Stop first', 'Stop the session before picking a cast point.')
+            return
+        self.status.set('Place cursor over either bait icon — saving position in 3 seconds')
+        self.root.after(3000, self.capture_cast)
+
+    def capture_cast(self):
+        if self.worker and self.worker.is_alive():
+            return
+        try:
+            import pyautogui as pg
+            x, y = pg.position()
+            if not (0 <= x < 1920 and 0 <= y < 1080):
+                raise ValueError('Pick a point inside the primary 1920×1080 display')
+            self.vars['cast_x'].set(str(x))
+            self.vars['cast_y'].set(str(y))
+            self.status.set(f'Cast point saved: ({x}, {y}) — Save profile to keep it')
+        except Exception as exc:
+            messagebox.showerror('Could not save cast point', str(exc))
 
     def sample(self):
         if self.worker and self.worker.is_alive():

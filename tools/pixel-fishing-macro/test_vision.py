@@ -67,3 +67,66 @@ class VisionTests(unittest.TestCase):
             self.assertEqual(events[-1][0],'done')
 
 if __name__=='__main__':unittest.main()
+
+class CastingTests(unittest.TestCase):
+    def simulate(self, dry=False, lose_focus=False, stop_on_down=False, active=False):
+        class Clock:
+            now=0.
+            cancelled=False
+            def is_set(self): return self.cancelled
+            def wait(self,seconds):
+                self.now+=seconds
+                return self.cancelled
+        clock=Clock()
+        class Backend:
+            FAILSAFE=True
+            focused=True
+            def __init__(self): self.actions=[]
+            def screenshot(self):
+                clock.now+=.05
+                return np.zeros((1080,1920,3),dtype='uint8')
+            def moveTo(self,x,y):
+                self.actions.append(('move',x,y))
+                if lose_focus: self.focused=False
+            def mouseDown(self,button):
+                self.actions.append(('down',button))
+                if stop_on_down: clock.cancelled=True
+            def mouseUp(self,button): self.actions.append(('up',button))
+            def keyDown(self,key): self.actions.append(('key',key))
+            def keyUp(self,key): self.actions.append(('release',key))
+        b=Backend();events=[]
+        obs=Observation(bar=(549,100,822,70),fish_x=960,target_x=960,target_width=120) if active else Observation()
+        p=Profile(visual=True,cast_x=1185,cast_y=755,dry_run=dry,minutes=.12,visual_timeout=5,countdown=1)
+        with patch('vision.time.monotonic',lambda:clock.now), patch('vision.focused_game',lambda:b.focused), patch('vision.Detector') as d:
+            d.return_value.inspect.return_value=obs
+            run_visual(p,clock,lambda *a:events.append(a),b)
+        return b.actions,events
+
+    def test_click_once_then_timeout(self):
+        actions,events=self.simulate()
+        self.assertEqual(actions,[('move',1185,755),('down','left'),('up','left')])
+        self.assertTrue(any(e[0]=='timeout' for e in events))
+
+    def test_dry_cast_no_mouse_input(self):
+        actions,events=self.simulate(dry=True)
+        self.assertEqual(actions,[])
+        self.assertEqual(sum(e[0]=='action' and 'cast click' in e[1] for e in events),1)
+
+    def test_focus_lost_during_move_prevents_click(self):
+        actions,_=self.simulate(lose_focus=True)
+        self.assertEqual(actions,[('move',1185,755)])
+
+    def test_mouse_released_on_stop(self):
+        actions,events=self.simulate(stop_on_down=True)
+        self.assertEqual(actions[-2:],[('down','left'),('up','left')])
+        self.assertEqual(events[-1][0],'done')
+
+    def test_existing_minigame_skips_cast(self):
+        actions,_=self.simulate(active=True)
+        self.assertEqual(actions,[])
+
+    def test_requires_valid_coordinates_only_when_automatic(self):
+        for x,y in [(-1,755),(1920,755),(1185,1080)]:
+            with self.assertRaises(ValueError): Profile(visual=True,cast_x=x,cast_y=y).validate()
+        Profile(visual=True,auto_cast=False).validate()
+        Profile(visual=True,cast_x=1185,cast_y=755).validate()
