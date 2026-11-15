@@ -14,7 +14,7 @@ class App:
     def __init__(self, root):
         self.root = root
         root.title('Pixel Worlds • Fishing Lab')
-        root.geometry('820x780')
+        root.geometry('880x840')
         root.minsize(740, 700)
         self.queue = queue.Queue()
         self.stop_event = threading.Event()
@@ -46,7 +46,7 @@ class App:
             var = tk.StringVar(value=str(getattr(defaults, key)))
             self.vars[key] = var
             ttk.Entry(grid, textvariable=var, width=15).grid(row=row, column=col+1, sticky='ew', padx=(0, 18), pady=6)
-        for key, label in [('dry_run', 'Dry run — simulate without game input'), ('pixel', 'Detect fresh bite color (live mode only)')]:
+        for key, label in [('visual', 'Visual assist (Windows, 1920×1080, maximum zoom; cast manually)'), ('dry_run', 'Dry run — observe/simulate without game input'), ('pixel', 'Detect fresh bite color (live mode only)')]:
             var = tk.BooleanVar(value=getattr(defaults, key))
             self.vars[key] = var
             ttk.Checkbutton(shell, text=label, variable=var).pack(anchor='w', pady=5)
@@ -85,7 +85,12 @@ class App:
         try:
             p = self.profile()
             backend = None
-            if not p.dry_run:
+            self.stop_event.clear()
+            if p.visual:
+                import sys
+                if sys.platform != 'win32':
+                    raise ValueError('Visual assist currently supports Windows only')
+            if not p.dry_run or p.visual:
                 import pyautogui as backend
                 from pynput import keyboard
                 backend.FAILSAFE = True
@@ -96,7 +101,6 @@ class App:
                     backend.pixel(p.x, p.y)  # Check screen access before countdown.
                 self.listener = keyboard.Listener(on_press=lambda key: self.stop_event.set() if key == keyboard.Key.f8 else None)
                 self.listener.start()
-            self.stop_event.clear()
             self.start_button.configure(state='disabled')
             self.worker = threading.Thread(target=run, args=(p,self.stop_event,self.emit,backend), daemon=True)
             self.worker.start()
@@ -124,7 +128,7 @@ class App:
             if kind == 'state':
                 self.status.set(message)
             if kind == 'done':
-                self.status.set(f'Stopped · {message} completed cycles (catch success unverified)')
+                self.status.set(f'Stopped · {message} cycles / observed rounds (catch success unverified)')
                 self.start_button.configure(state='normal')
                 if self.listener:
                     self.listener.stop()
@@ -192,6 +196,8 @@ if __name__ == '__main__':
     import sys
     if '--smoke-test' in sys.argv:
         import pyautogui
+        from vision import Detector
+        Detector()
         from pynput import keyboard, mouse
         root.update()
         root.destroy()

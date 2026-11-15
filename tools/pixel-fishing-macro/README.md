@@ -2,6 +2,16 @@
 
 Local Python desktop macro for macOS and Windows. Sends configurable keyboard or mouse inputs, with timed cycles or a calibrated pixel-color bite trigger. This is an independent QA tool, not an official Pixel Worlds integration.
 
+## Visual assist (experimental, Windows)
+
+Enable **Visual assist**, leave **Dry run** enabled, click Start, and focus Pixel Worlds. Cast manually and play one round. The app observes the screen, locates the fishing track automatically when it appears, and logs proposed steering without sending inputs. Then try a short live round with Dry run unchecked: **Space** responds to STRIKE, **A** moves the target left, and **D** moves it right. F8 stops the session.
+
+Use a primary-display game view of **1920×1080 at maximum zoom**, matching the supplied recording. Keep the game foreground; other windows or overlays can interrupt detection. Automatic calibration means finding the track and target from the visible UI during a session; it does not launch with Windows or the game, change your game settings, or recognize arbitrary resolutions. The Windows foreground title must contain “Pixel Worlds”.
+
+This first visual mode assists **one manually cast round**. It releases controls on uncertain tracking and stops after the track is lost for 0.6 seconds. It cannot certify a catch or automatically recast. Timed/pixel controls and bite wait are unused in visual mode; the overall session limit still applies. The cast binding remains configurable in timed mode. Visual assist uses screen capture even in Dry run and currently supports Windows only; macOS retains the previous timed/pixel mode.
+
+Validation: 13 automated tests pass. Offline replay of 128 frames sampled at 5 fps from the supplied clip detected the STRIKE cue in 2 frames, the track in 17, and both fish/target in 16. This checks recognition on one recorded round, **not live control stability**. Different fish graphics, UI colors, scaling, latency, or zoom may need further tuning. Start with an observed trial and use F8 to stop if steering is incorrect.
+
 ## Windows app download
 
 Open the repository's **Actions → Fishing Lab Windows EXE**, select the latest successful run, then download **FishingLab-Windows-x64** under **Artifacts** (sign in to GitHub if prompted). Extract the ZIP and double-click **FishingLab.exe**. Python is bundled; no separate Python installation is needed. The unsigned executable targets Windows 10/11 x64 and may prompt Windows SmartScreen.

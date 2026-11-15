@@ -13,6 +13,7 @@ class Profile:
     cycles: int = 30
     minutes: float = 10
     dry_run: bool = True
+    visual: bool = False
     pixel: bool = False
     x: int = 0
     y: int = 0
@@ -48,6 +49,9 @@ def matches(rgb, hex_color, tolerance):
 
 def run(profile, stop, emit, backend=None):
     p = profile.validate()
+    if p.visual:
+        from vision import run_visual
+        return run_visual(p, stop, emit, backend)
     started = time.monotonic()
     deadline = started + p.minutes * 60
 

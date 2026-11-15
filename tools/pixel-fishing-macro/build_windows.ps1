@@ -6,7 +6,7 @@ Check-Exit
 $python = Join-Path $PSScriptRoot '.build-venv\Scripts\python.exe'
 & $python -m pip install -r requirements.txt pyinstaller==6.16.0
 Check-Exit
-& $python -m unittest -v test_engine.py
+& $python -m unittest discover -v
 Check-Exit
 & $python -m PyInstaller --noconfirm --clean --onefile --windowed --name FishingLab --hidden-import pynput.keyboard._win32 --hidden-import pynput.mouse._win32 app.py
 Check-Exit
