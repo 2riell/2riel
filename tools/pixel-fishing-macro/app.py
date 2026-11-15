@@ -189,4 +189,11 @@ class App:
 if __name__ == '__main__':
     root = tk.Tk()
     App(root)
-    root.mainloop()
+    import sys
+    if '--smoke-test' in sys.argv:
+        import pyautogui
+        from pynput import keyboard, mouse
+        root.update()
+        root.destroy()
+    else:
+        root.mainloop()
