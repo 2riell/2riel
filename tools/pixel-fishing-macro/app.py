@@ -46,7 +46,7 @@ class App:
             var = tk.StringVar(value=str(getattr(defaults, key)))
             self.vars[key] = var
             ttk.Entry(grid, textvariable=var, width=15).grid(row=row, column=col+1, sticky='ew', padx=(0, 18), pady=6)
-        for key, label in [('visual', 'Visual assist (Windows, 1920×1080, maximum zoom)'), ('auto_cast', 'Automatically left-click the saved cast point (visual mode)'), ('dry_run', 'Dry run — observe/simulate without game input'), ('pixel', 'Detect fresh bite color (live mode only)')]:
+        for key, label in [('visual', 'Visual assist (Windows, 1920×1080, maximum zoom)'), ('auto_cast', 'Automatically left-click the saved cast point (visual mode)'), ('repeat', 'Collect fish and repeat until the cycle / time limit (visual mode)'), ('dry_run', 'Dry run — observe/simulate without game input'), ('pixel', 'Detect fresh bite color (live mode only)')]:
             var = tk.BooleanVar(value=getattr(defaults, key))
             self.vars[key] = var
             ttk.Checkbutton(shell, text=label, variable=var).pack(anchor='w', pady=5)
@@ -62,7 +62,7 @@ class App:
         bar2.pack(fill='x', pady=(0, 12))
         for title, callback in [('Load profile',self.load), ('Save profile',self.save), ('Export CSV',self.export)]:
             ttk.Button(bar2, text=title, command=callback).pack(side='left', padx=(0,8))
-        self.log = tk.Text(shell, height=10, bg='#09121e', fg='#9ce2d4', font=('Courier', 10), state='disabled', wrap='word')
+        self.log = tk.Text(shell, height=7, bg='#09121e', fg='#9ce2d4', font=('Courier', 10), state='disabled', wrap='word')
         self.log.pack(fill='both', expand=True)
         ttk.Label(shell, text='Emergency: F8, Escape in this window, or move pointer to a screen corner.\nmacOS: grant Accessibility and Screen Recording permission to your Python/Terminal app.', font=('Arial', 9)).pack(anchor='w', pady=(10,0))
         root.bind('<Escape>', lambda e: self.stop())
@@ -129,7 +129,7 @@ class App:
             if kind == 'state':
                 self.status.set(message)
             if kind == 'done':
-                self.status.set(f'Stopped · {message} cycles / observed rounds (catch success unverified)')
+                self.status.set(f'Stopped · {message} cycles completed (see log for mode)')
                 self.start_button.configure(state='normal')
                 if self.listener:
                     self.listener.stop()

@@ -21,6 +21,8 @@ def template(name):
 
 @dataclass
 class Observation:
+    caught: bool = False
+    take: tuple | None = None
     strike: bool = False
     bar: tuple | None = None
     fish_x: float | None = None
@@ -42,14 +44,28 @@ class Detector:
         self.strike = template('STRIKE')
         self.fish = template('FISH')
         self.last_bar = None
+        self.caught = template('CAUGHT')
+        self.take = template('TAKE')
 
     def inspect(self, frame):
         if frame.shape[:2] != (1080, 1920):
             raise ValueError('Visual assist requires a 1920×1080 game view at maximum zoom')
+        # Require both the catch title and Take Fish button at the dialog spacing.
+        gray = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
+        _,score,_,point = cv2.minMaxLoc(cv2.matchTemplate(gray,self.caught,cv2.TM_CCOEFF_NORMED))
+        caught = score >= .85
+        if caught:
+            hx,hy = point
+            left,top = max(0,hx-80), max(0,hy+440)
+            roi = gray[top:min(1080,hy+560),left:min(1920,hx+240)]
+            if roi.shape[0] >= self.take.shape[0] and roi.shape[1] >= self.take.shape[1]:
+                _,confidence,_,location = cv2.minMaxLoc(cv2.matchTemplate(roi,self.take,cv2.TM_CCOEFF_NORMED))
+                if confidence >= .80:
+                    return Observation(caught=True,take=(left+location[0]+self.take.shape[1]//2,top+location[1]+self.take.shape[0]//2))
         # Search the upper half, independent of the character's horizontal position.
         mask = green(frame[:540])
         score = cv2.minMaxLoc(cv2.matchTemplate(mask, self.strike, cv2.TM_CCOEFF_NORMED))[1]
-        obs = Observation(strike=score >= .78)
+        obs = Observation(caught=caught,strike=score >= .78)
         # Locate the wide white frame surrounding the blue fishing track.
         white = cv2.inRange(frame[:400], (205,205,205), (255,255,255))
         contours, _ = cv2.findContours(white, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -110,7 +126,7 @@ def focused_game():
 
 
 def run_visual(p, stop, emit, backend):
-    """Optional coordinate cast, automatic strike and steering for one round."""
+    """Coordinate cast, strike, steering, collection, and bounded repeat cycles."""
     detector = Detector()
     deadline = time.monotonic() + p.minutes*60
     held = None
@@ -121,6 +137,10 @@ def run_visual(p, stop, emit, backend):
     strikes = 0
     cast_sent = False
     cast_time = None
+    take_since = None
+    take_point = None
+    close_since = None
+    collected_at = None
 
     def release():
         nonlocal held
@@ -134,6 +154,26 @@ def run_visual(p, stop, emit, backend):
                 backend.FAILSAFE = previous
                 held = None
 
+    def click(point):
+        if stop.is_set() or time.monotonic() >= deadline or not focused_game():
+            return False
+        if p.dry_run:
+            return True
+        backend.moveTo(*point)
+        if stop.is_set() or time.monotonic() >= deadline or not focused_game():
+            return False
+        try:
+            backend.mouseDown(button='left')
+            stop.wait(.06)
+        finally:
+            previous = backend.FAILSAFE
+            try:
+                backend.FAILSAFE = False
+                backend.mouseUp(button='left')
+            finally:
+                backend.FAILSAFE = previous
+        return True
+
     try:
         emit('state', 'Focus Pixel Worlds — casting after countdown' if p.auto_cast else 'Visual assist: focus Pixel Worlds and cast manually')
         if stop.wait(p.countdown):
@@ -141,6 +181,7 @@ def run_visual(p, stop, emit, backend):
         while not stop.is_set() and time.monotonic() < deadline and completed < p.cycles:
             if not focused_game():
                 release()
+                take_since = close_since = None
                 emit('state', 'Paused — focus Pixel Worlds')
                 if stop.wait(.3):
                     break
@@ -151,8 +192,67 @@ def run_visual(p, stop, emit, backend):
             # Drop slow captures instead of steering using an old frame.
             if time.monotonic()-before > .5 or not focused_game() or stop.is_set():
                 release()
+                take_since = close_since = None
                 continue
             now = time.monotonic()
+            # Collection is separate from tracking: loss of the bar is not success.
+            if obs.take is not None:
+                release()
+                close_since = None
+                if state == 'collecting':
+                    if now-collected_at > 8:
+                        emit('timeout','Take Fish dialog did not close — stopped without another click')
+                        break
+                else:
+                    if take_point is None or abs(obs.take[0]-take_point[0])+abs(obs.take[1]-take_point[1]) > 12:
+                        take_since = now
+                    take_point = obs.take
+                    if take_since is None:
+                        take_since = now
+                    if now-take_since >= .25 and click(obs.take):
+                        emit('action',('DRY ' if p.dry_run else '')+'Take Fish click')
+                        emit('state','Waiting for collection dialog to close')
+                        state = 'collecting'
+                        collected_at = now
+                stop.wait(.03)
+                continue
+            take_since = None
+            take_point = None
+            if state == 'collecting':
+                release()
+                if obs.caught:
+                    close_since = None
+                    if now-collected_at > 8:
+                        emit('timeout','Catch dialog still visible — stopped')
+                        break
+                    stop.wait(.03)
+                    continue
+                if close_since is None:
+                    close_since = now
+                if now-close_since >= .5:
+                    completed += 1
+                    emit('cycle',str(completed))
+                    if completed >= p.cycles or not p.repeat:
+                        break
+                    emit('state','Fish dialog closed — cooldown before next cast')
+                    state = 'cooldown'
+                    last_seen = now
+                stop.wait(.03)
+                continue
+            if state == 'cooldown':
+                if now-last_seen < p.cooldown:
+                    stop.wait(.03)
+                    continue
+                state = 'waiting'
+                cast_sent = False
+                cast_time = None
+                strikes = 0
+                strike_cleared = True
+                detector.last_bar = None
+            if obs.caught:
+                release()
+                stop.wait(.03)
+                continue
             if p.auto_cast and not cast_sent and state == 'waiting':
                 # Attach to a strike/minigame already in progress without clicking.
                 if obs.strike or obs.bar is not None:
@@ -160,23 +260,8 @@ def run_visual(p, stop, emit, backend):
                 else:
                     if not (0 <= p.cast_x < 1920 and 0 <= p.cast_y < 1080):
                         raise ValueError('Pick a valid cast point before starting')
-                    if not p.dry_run:
-                        if not focused_game() or stop.is_set() or time.monotonic() >= deadline:
-                            continue
-                        backend.moveTo(p.cast_x, p.cast_y)
-                        # Moving the pointer can take time; recheck focus before click.
-                        if not focused_game() or stop.is_set():
-                            continue
-                        try:
-                            backend.mouseDown(button='left')
-                            stop.wait(.06)
-                        finally:
-                            previous = backend.FAILSAFE
-                            try:
-                                backend.FAILSAFE = False
-                                backend.mouseUp(button='left')
-                            finally:
-                                backend.FAILSAFE = previous
+                    if not click((p.cast_x,p.cast_y)):
+                        continue
                     cast_sent = True
                     cast_time = now
                     emit('action', ('DRY ' if p.dry_run else '') + f'cast click at ({p.cast_x}, {p.cast_y})')
@@ -204,9 +289,12 @@ def run_visual(p, stop, emit, backend):
                 release()
                 if state == 'tracking':
                     if now-last_seen > .6:
-                        # An occluded bar and an ended round are ambiguous; stop.
-                        emit('state','Track disappeared — stopped; catch outcome unverified')
-                        completed += 1
+                        emit('state','Waiting for Fish Caught dialog')
+                        state = 'await_catch'
+                        last_seen = now
+                elif state == 'await_catch':
+                    if now-last_seen > 12:
+                        emit('timeout','No catch dialog — stopped without collecting or recasting')
                         break
                 elif obs.strike and strike_cleared:
                     if strikes:

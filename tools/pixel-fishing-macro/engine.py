@@ -15,6 +15,7 @@ class Profile:
     dry_run: bool = True
     visual: bool = False
     auto_cast: bool = True
+    repeat: bool = True
     cast_x: int = -1
     cast_y: int = -1
     visual_timeout: float = 60

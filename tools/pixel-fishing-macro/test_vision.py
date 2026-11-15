@@ -130,3 +130,75 @@ class CastingTests(unittest.TestCase):
             with self.assertRaises(ValueError): Profile(visual=True,cast_x=x,cast_y=y).validate()
         Profile(visual=True,auto_cast=False).validate()
         Profile(visual=True,cast_x=1185,cast_y=755).validate()
+
+class CollectionTests(unittest.TestCase):
+    def test_dialog_requires_title_and_button(self):
+        im=np.zeros((1080,1920,3),dtype='uint8')
+        header=template('CAUGHT');button=template('TAKE')
+        def paste(a,x,y):
+            h,w=a.shape
+            im[y:y+h,x:x+w]=cv2.cvtColor(a,cv2.COLOR_GRAY2BGR)
+        paste(button,842,754)
+        self.assertIsNone(Detector().inspect(im).take)
+        paste(header,880,282)
+        self.assertEqual(Detector().inspect(im).take,(960,788))
+        shifted=cv2.warpAffine(im,np.float32([[1,0,70],[0,1,-50]]),(1920,1080))
+        self.assertEqual(Detector().inspect(shifted).take,(1030,738))
+
+    def simulate(self, stuck=False, no_dialog=False, dry=False, repeat=True):
+        class Clock:
+            now=0.
+            def is_set(self):return False
+            def wait(self,delay):self.now+=delay;return False
+        clock=Clock()
+        class Backend:
+            FAILSAFE=True
+            point=None
+            def __init__(self):self.clicks=[]
+            def screenshot(self):clock.now+=.1;return np.zeros((1080,1920,3),dtype='uint8')
+            def moveTo(self,x,y):self.point=(x,y)
+            def mouseDown(self,button):self.clicks.append(self.point)
+            def mouseUp(self,button):pass
+            def keyDown(self,key):pass
+            def keyUp(self,key):pass
+        def inspect(frame):
+            t=clock.now
+            if no_dialog and t>=3.5:return Observation()
+            if stuck and t>=4.5:return Observation(caught=True,take=(960,788))
+            phase=t if t<6 else t-5
+            if 2<=phase<2.5:return Observation(strike=True)
+            if 2.5<=phase<3.5:return Observation(bar=(549,100,822,70),fish_x=960,target_x=960,target_width=120)
+            if 4.5<=phase<5.5:return Observation(caught=True,take=(960,788))
+            return Observation()
+        b=Backend();events=[]
+        p=Profile(visual=True,cast_x=1185,cast_y=755,countdown=1,cooldown=.1,minutes=.35,cycles=2,dry_run=dry,repeat=repeat)
+        with patch('vision.time.monotonic',lambda:clock.now),patch('vision.focused_game',return_value=True),patch('vision.Detector') as d:
+            d.return_value.inspect.side_effect=inspect
+            run_visual(p,clock,lambda *a:events.append(a),b)
+        return b.clicks,events
+
+    def test_collect_close_and_repeat_to_limit(self):
+        clicks,events=self.simulate()
+        self.assertEqual(clicks,[(1185,755),(960,788),(1185,755),(960,788)])
+        self.assertEqual(events[-1],('done','2'))
+
+    def test_stuck_dialog_never_reclicks_or_recasts(self):
+        clicks,events=self.simulate(stuck=True)
+        self.assertEqual(clicks,[(1185,755),(960,788)])
+        self.assertEqual(events[-1],('done','0'))
+        self.assertTrue(any(e[0]=='timeout' for e in events))
+
+    def test_missing_catch_does_not_count_or_repeat(self):
+        clicks,events=self.simulate(no_dialog=True)
+        self.assertEqual(clicks,[(1185,755)])
+        self.assertEqual(events[-1],('done','0'))
+
+    def test_repeat_disabled_collects_one(self):
+        clicks,events=self.simulate(repeat=False)
+        self.assertEqual(clicks,[(1185,755),(960,788)])
+        self.assertEqual(events[-1],('done','1'))
+
+    def test_dry_collection_never_clicks(self):
+        clicks,events=self.simulate(dry=True)
+        self.assertEqual(clicks,[])
+        self.assertEqual(events[-1],('done','2'))
