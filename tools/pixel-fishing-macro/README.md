@@ -2,7 +2,19 @@
 
 Local Python desktop macro for macOS and Windows. Sends configurable keyboard or mouse inputs, with timed cycles or a calibrated pixel-color bite trigger. This is an independent QA tool, not an official Pixel Worlds integration.
 
-## Install and run
+## Windows app download
+
+Open the repository's **Actions → Fishing Lab Windows EXE**, select the latest successful run, then download **FishingLab-Windows-x64** under **Artifacts** (sign in to GitHub if prompted). Extract the ZIP and double-click **FishingLab.exe**. Python is bundled; no separate Python installation is needed. The unsigned executable targets Windows 10/11 x64 and may prompt Windows SmartScreen.
+
+To build locally on Windows, install Python 3.12 and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build_windows.ps1
+```
+
+The build runs the engine tests, creates a single executable, and tests packaged GUI startup without sending game input. Find it in `dist/FishingLab.exe`.
+
+## Install and run from source
 
 Install **Python 3.11 or newer** from python.org, including Tcl/Tk. Extract this folder first.
 
@@ -49,6 +61,6 @@ python -m pip install pyinstaller
 python -m PyInstaller --noconfirm --windowed --name FishingLab app.py
 ```
 
-Output is in `dist/`. Unsigned local builds may trigger OS prompts. Dependencies must be installed in the same Python environment first. No prebuilt or signed binaries are included.
+Output is in `dist/`. Unsigned local builds may trigger OS prompts. Dependencies must be installed in the same Python environment first. Windows builds are available as GitHub Actions artifacts; binaries are unsigned.
 
 Engine tests cover cancellation, time limits, cycle bounds, input release, stale/fresh pixel signals, and configuration validation. Live game behavior and OS permissions must be tested on the target machines.
