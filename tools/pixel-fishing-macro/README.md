@@ -59,6 +59,10 @@ Enable **Collect fish and repeat** to run the full cycle: cast → Space at STRI
 Validation: automated tests pass, including cast coordinates, one-click behavior, timeout, dry run, focus loss, input release, title/button recognition, repeat cycles, collection timeout, and cycle limits. Additional tests cover distant fish at both ends of the track, red/yellow graphics, center tolerance and tracker settings. Offline replay detected Take Fish in 7 sampled frames of the supplied recording, with no detections outside the catch dialog. Offline recognition was checked on the supplied recorded round, not live gameplay. Live casting and steering still need a supervised trial on your computer.
 
 
+## macOS keyboard-listener crash fix
+
+A supplied macOS 27.2 ARM64 crash report showed a background keyboard-listener thread failing a main-queue assertion in HIToolbox input-source lookup. The previous pynput listener started a keyboard-layout query on its background thread. Mac builds now exclude pynput and poll the physical F8 key with Quartz on Tk's main thread every 20 ms, without keyboard-layout lookup. Windows retains its existing listener. Polling stops when the session ends; polling errors stop the session with an explicit reason. The packaged Mac smoke test now starts and stops this native F8 monitor while running the UI loop, rather than only importing the old listener. CI runs macOS 15; confirmation on the reporting macOS 27.2 machine is still needed.
+
 ## macOS app
 
 Download **FishingLab-macOS-Apple-Silicon** for M-series Macs or **FishingLab-macOS-Intel** for Intel Macs from the successful Fishing Lab macOS App workflow. Extract the artifact, then extract its inner FishingLab-macOS.zip and move FishingLab.app to Applications. The bundle is ad-hoc signed, not Apple-notarized; macOS may require **System Settings → Privacy & Security → Open Anyway** after the first launch attempt.

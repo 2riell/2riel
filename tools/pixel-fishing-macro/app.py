@@ -198,6 +198,7 @@ class App:
         self.queue.put((kind, message))
 
     def start(self):
+        import sys
         if self.worker and self.worker.is_alive():
             return
         try:
@@ -215,14 +216,21 @@ class App:
                     check_permissions()
             if not p.dry_run or p.visual:
                 import pyautogui as backend
-                from pynput import keyboard
                 backend.FAILSAFE = True
                 backend.PAUSE = 0 if p.visual else .03
                 if p.pixel and not p.visual:
                     if not backend.onScreen(p.x, p.y):
                         raise ValueError('Bite pixel must be on the primary display')
                     backend.pixel(p.x, p.y)  # Check screen access before countdown.
-                self.listener = keyboard.Listener(on_press=lambda key: self.stop('F8 hotkey') if key == keyboard.Key.f8 else None)
+                if sys.platform == 'darwin':
+                    from mac_support import MacStopHotkey
+                    def hotkey_error(message):
+                        self.emit('error',message)
+                        self.stop('macOS F8 monitor failed')
+                    self.listener=MacStopHotkey(self.root,lambda:self.stop('F8 hotkey'),hotkey_error)
+                else:
+                    from pynput import keyboard
+                    self.listener=keyboard.Listener(on_press=lambda key:self.stop('F8 hotkey') if key==keyboard.Key.f8 else None)
                 self.listener.start()
             self.completed=0
             self.fish=0;self.items=0;self.started_at=time.monotonic();self.ended_at=None
@@ -414,7 +422,18 @@ if __name__ == '__main__':
             import AppKit, Quartz, ApplicationServices
             from mac_support import focused_game
             focused_game()
-        from pynput import keyboard, mouse
+        if sys.platform == 'darwin':
+            from mac_support import MacStopHotkey
+            hotkey_errors=[]
+            monitor=MacStopHotkey(root,lambda:None,hotkey_errors.append)
+            monitor.start()
+            root.after(150,root.quit)
+            root.mainloop()
+            monitor.stop()
+            assert not hotkey_errors,hotkey_errors
+            assert 'pynput' not in sys.modules
+        else:
+            from pynput import keyboard, mouse
         root.update()
         app.vars['cast_x'].set('1185')
         app.vars['cast_y'].set('755')

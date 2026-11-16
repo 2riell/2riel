@@ -4,7 +4,7 @@ cd "$(dirname "$0")"
 python3 -m venv .build-venv-mac
 .build-venv-mac/bin/python -m pip install -r requirements.txt pyinstaller==6.16.0
 .build-venv-mac/bin/python -m unittest discover -v
-.build-venv-mac/bin/python -m PyInstaller --noconfirm --clean --windowed --onedir --name FishingLab --osx-bundle-identifier com.fishinglab.desktop --collect-submodules mss.darwin --hidden-import pynput.keyboard._darwin --hidden-import pynput.mouse._darwin --hidden-import AppKit --hidden-import Quartz --hidden-import ApplicationServices app.py
+.build-venv-mac/bin/python -m PyInstaller --noconfirm --clean --windowed --onedir --name FishingLab --osx-bundle-identifier com.fishinglab.desktop --collect-submodules mss.darwin --exclude-module pynput --hidden-import AppKit --hidden-import Quartz --hidden-import ApplicationServices app.py
 /usr/libexec/PlistBuddy -c 'Set :NSHighResolutionCapable true' dist/FishingLab.app/Contents/Info.plist || /usr/libexec/PlistBuddy -c 'Add :NSHighResolutionCapable bool true' dist/FishingLab.app/Contents/Info.plist
 codesign --force --deep --sign - dist/FishingLab.app
 # GUI/import validation only: CI cannot grant interactive Screen Recording access.
