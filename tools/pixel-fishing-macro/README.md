@@ -32,7 +32,7 @@ When the fishing track remains visible but the fish is lost, the app stays in Re
 
 ## Simple and Advanced settings
 
-The redesigned dark window opens on **Simple**: cast position picker, cycle/time limits, Dry run, automatic casting, and repeat. **Advanced** contains tracker tuning, timeouts, timed/pixel controls, and **Window opacity (85–100%)**. Opacity is optional and defaults to fully opaque; it makes the entire window translucent rather than adding a blur effect. Settings persist in saved profiles. New Windows sessions default to visual mode; older profiles preserve their selected mode.
+The compact charcoal/cyan window keeps Start/Stop, status, and separate Fish / Items / Cycles / Session time cards visible above three tabs. **Simple** groups cast position, automation, session limits, and profile controls in two columns. **Session log** contains the scrollable activity history and CSV export. **Advanced** contains tracker tuning, timeouts, timed/pixel controls, and **Window opacity (85–100%)**. Opacity is optional and defaults to fully opaque; it makes the entire window translucent rather than adding a blur effect. Settings persist in saved profiles. New Windows sessions default to visual mode; older profiles preserve their selected mode.
 
 The tracker now targets **60 Hz**, adjustable from **15 to 120 Hz** in Advanced. The status card shows measured FPS and capture/detection time. Actual refresh depends on hardware, screen capture and game rendering. MSS replaces the previous screenshot method, unnecessary input pauses are removed in visual mode, and the detector searches only the fishing track after it has located it. When the track disappears, it resumes searching for strike/catch dialogs.
 
