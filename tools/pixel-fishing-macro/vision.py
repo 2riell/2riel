@@ -129,6 +129,41 @@ class Detector:
         return obs
 
 
+class CastReady:
+    """Learn the selected bait icon; require disappearance before accepting return."""
+    def __init__(self):
+        self.reference = None
+        self.hidden = False
+        self.since = None
+
+    def crop(self, frame, point):
+        x,y = point
+        if not (48 <= x < 1872 and 48 <= y < 1032):
+            return None
+        return cv2.cvtColor(frame[y-48:y+48,x-48:x+48],cv2.COLOR_BGR2GRAY)
+
+    def learn(self, frame, point):
+        patch = self.crop(frame,point)
+        if patch is not None and patch.std() >= 12:
+            self.reference = patch.copy()
+        self.hidden = False
+        self.since = None
+
+    def returned(self, frame, point, now):
+        patch = self.crop(frame,point)
+        if self.reference is None or patch is None:
+            return False
+        score = float(cv2.matchTemplate(patch,self.reference,cv2.TM_CCOEFF_NORMED)[0,0])
+        if score < .6:
+            self.hidden = True
+        if self.hidden and score >= .85:
+            if self.since is None:
+                self.since = now
+            return now-self.since >= .8
+        self.since = None
+        return False
+
+
 def focused_game():
     """Windows foreground gate. Called again immediately before each input."""
     if sys.platform != 'win32':
@@ -145,6 +180,7 @@ def focused_game():
 def run_visual(p, stop, emit, backend):
     """Coordinate cast, strike, steering, collection, and bounded repeat cycles."""
     detector = Detector()
+    cast_ready = CastReady()
     deadline = time.monotonic() + p.minutes*60
     held = None
     state = 'waiting'
@@ -225,6 +261,7 @@ def run_visual(p, stop, emit, backend):
             if now-stats_start >= 1:
                 emit('metrics', f'{stats_frames/(now-stats_start):.1f} FPS | {1000*stats_processing/stats_frames:.1f} ms capture + detect')
                 stats_start,stats_frames,stats_processing = now,0,0.0
+            ready_to_recast = cast_ready.returned(frame,(p.cast_x,p.cast_y),now) if p.auto_cast else False
             # Collection is separate from tracking: loss of the bar is not success.
             if obs.take is not None:
                 release()
@@ -292,6 +329,7 @@ def run_visual(p, stop, emit, backend):
                 else:
                     if not (0 <= p.cast_x < 1920 and 0 <= p.cast_y < 1080):
                         raise ValueError('Pick a valid cast point before starting')
+                    cast_ready.learn(frame,(p.cast_x,p.cast_y))
                     if not click((p.cast_x,p.cast_y)):
                         continue
                     cast_sent = True
@@ -325,7 +363,11 @@ def run_visual(p, stop, emit, backend):
                         state = 'await_catch'
                         last_seen = now
                 elif state == 'await_catch':
-                    if now-last_seen > 12:
+                    if ready_to_recast and now-last_seen >= 2 and p.repeat:
+                        emit('failed','No catch dialog; bait icon returned — retrying after cooldown')
+                        state = 'cooldown'
+                        last_seen = now
+                    elif now-last_seen > 12:
                         emit('timeout','No catch dialog — stopped without collecting or recasting')
                         break
                 elif obs.strike and strike_cleared:

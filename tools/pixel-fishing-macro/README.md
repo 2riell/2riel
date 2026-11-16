@@ -2,6 +2,10 @@
 
 Local Python desktop macro for macOS and Windows. Sends configurable keyboard or mouse inputs, with timed cycles or a calibrated pixel-color bite trigger. This is an independent QA tool, not an official Pixel Worlds integration.
 
+## Retry after a missed fish
+
+With automatic casting and repeat enabled, the app learns the image around your saved bait point before casting. If tracking ends without a catch dialog, it waits for that image to disappear and then return steadily, waits the cooldown, and casts again. Failed rounds are logged and do not increase Fish collected. Time limits, F8 and normal timeout stops remain active. If the bait point moves, the image cannot be learned (for example, the session starts during a minigame), or the icon does not return, it stops instead of guessing.
+
 ## Session counters and unlimited cycles
 
 Enable **Unlimited cycles** in Simple to ignore the numeric cycle limit. Keep **Take fish and repeat** enabled for continuous visual fishing. The session time limit, timeout stops, Stop button and F8 still apply.

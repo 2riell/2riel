@@ -237,3 +237,25 @@ class UnlimitedTests(CollectionTests):
     def test_dry_run_has_no_fish_count(self):
         _,events=self.simulate(dry=True)
         self.assertFalse(any(e[0]=='fish' for e in events))
+
+class FailureRecoveryTests(unittest.TestCase):
+    def test_ready_requires_disappearance_and_stable_return(self):
+        from vision import CastReady
+        r=CastReady();rng=np.random.default_rng(123)
+        icon=rng.integers(0,255,(1080,1920,3),dtype=np.uint8)
+        blank=np.zeros_like(icon);point=(1185,755)
+        r.learn(icon,point)
+        self.assertFalse(r.returned(icon,point,0))
+        self.assertFalse(r.returned(blank,point,1))
+        self.assertFalse(r.returned(icon,point,2))
+        self.assertTrue(r.returned(icon,point,3))
+        r.learn(icon,point)
+        self.assertFalse(r.returned(icon,point,4))
+
+    def test_failed_round_recasts_without_counting_fish(self):
+        with patch('vision.CastReady') as ready:
+            ready.return_value.returned.return_value=True
+            clicks,events=CollectionTests().simulate(no_dialog=True)
+        self.assertGreaterEqual(clicks.count((1185,755)),2)
+        self.assertTrue(any(e[0]=='failed' for e in events))
+        self.assertFalse(any(e[0]=='fish' for e in events))
