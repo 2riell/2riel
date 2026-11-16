@@ -12,68 +12,129 @@ ROOT = Path(__file__).resolve().parent
 
 class App:
     def __init__(self, root):
+        import sys
         self.root = root
-        root.title('Pixel Worlds • Fishing Lab')
-        root.geometry('900x940')
-        root.minsize(740, 700)
+        root.title('Fishing Lab')
+        root.geometry('800x850')
+        root.minsize(740, 720)
         self.queue = queue.Queue()
         self.stop_event = threading.Event()
         self.worker = None
         self.listener = None
         self.rows = []
-        self.vars = {}
-        style = ttk.Style()
-        style.theme_use('clam')
-        style.configure('TFrame', background='#101c2a')
-        style.configure('TLabel', background='#101c2a', foreground='#e7edf5', font=('Arial', 11))
-        style.configure('TCheckbutton', background='#101c2a', foreground='#e7edf5')
-        style.configure('TButton', padding=8)
-        root.configure(bg='#101c2a')
-        shell = ttk.Frame(root, padding=24)
-        shell.pack(fill='both', expand=True)
-        ttk.Label(shell, text='FISHING LAB', font=('Arial', 24, 'bold')).pack(anchor='w')
-        ttk.Label(shell, text='Pixel Worlds · desktop input test harness').pack(anchor='w', pady=(4, 16))
-        self.status = tk.StringVar(value='Ready · dry run enabled')
-        ttk.Label(shell, textvariable=self.status, font=('Arial', 13, 'bold')).pack(anchor='w', pady=(0, 12))
-        grid = ttk.Frame(shell)
-        grid.pack(fill='x')
         defaults = Profile()
-        fields = [('cast_x','Cast click X'), ('cast_y','Cast click Y'), ('visual_timeout','Strike timeout (seconds)'), ('cast','Cast key (timed mode)'), ('reel','Reel action'), ('hold','Key hold (seconds)'), ('countdown','Focus countdown (seconds)'), ('bite_wait','Bite wait / timeout (seconds)'), ('cooldown','Cooldown (seconds)'), ('cycles','Maximum cycles'), ('minutes','Session limit (minutes)'), ('x','Bite pixel X'), ('y','Bite pixel Y'), ('color','Bite color (#RRGGBB)'), ('tolerance','RGB tolerance (0–255)')]
-        for i, (key, label) in enumerate(fields):
-            col = (i % 2) * 2
-            row = i // 2
-            ttk.Label(grid, text=label).grid(row=row, column=col, sticky='w', padx=(0, 8), pady=6)
-            var = tk.StringVar(value=str(getattr(defaults, key)))
-            self.vars[key] = var
-            ttk.Entry(grid, textvariable=var, width=15).grid(row=row, column=col+1, sticky='ew', padx=(0, 18), pady=6)
-        for key, label in [('visual', 'Visual assist (Windows, 1920×1080, maximum zoom)'), ('auto_cast', 'Automatically left-click the saved cast point (visual mode)'), ('repeat', 'Collect fish and repeat until the cycle / time limit (visual mode)'), ('dry_run', 'Dry run — observe/simulate without game input'), ('pixel', 'Detect fresh bite color (live mode only)')]:
-            var = tk.BooleanVar(value=getattr(defaults, key))
-            self.vars[key] = var
-            ttk.Checkbutton(shell, text=label, variable=var).pack(anchor='w', pady=5)
-        ttk.Label(shell, text='Actions: space, enter, a–z, 0–9, arrows, mouse:left, mouse:right\nMouse actions click at the current cursor. Keep the game focused.', font=('Arial', 10)).pack(anchor='w', pady=8)
-        bar = ttk.Frame(shell)
-        bar.pack(fill='x', pady=10)
-        self.start_button = ttk.Button(bar, text='▶ Start session', command=self.start)
-        self.start_button.pack(side='left')
-        ttk.Button(bar, text='■ STOP / F8', command=self.stop).pack(side='left', padx=8)
-        ttk.Button(bar, text='Sample pixel in 3s', command=self.sample).pack(side='left')
-        ttk.Button(bar, text='Pick cast point in 3s', command=self.pick_cast).pack(side='left', padx=8)
-        bar2 = ttk.Frame(shell)
-        bar2.pack(fill='x', pady=(0, 12))
-        for title, callback in [('Load profile',self.load), ('Save profile',self.save), ('Export CSV',self.export)]:
-            ttk.Button(bar2, text=title, command=callback).pack(side='left', padx=(0,8))
-        self.log = tk.Text(shell, height=7, bg='#09121e', fg='#9ce2d4', font=('Courier', 10), state='disabled', wrap='word')
-        self.log.pack(fill='both', expand=True)
-        ttk.Label(shell, text='Emergency: F8, Escape in this window, or move pointer to a screen corner.\nmacOS: grant Accessibility and Screen Recording permission to your Python/Terminal app.', font=('Arial', 9)).pack(anchor='w', pady=(10,0))
-        root.bind('<Escape>', lambda e: self.stop())
-        root.protocol('WM_DELETE_WINDOW', self.close)
-        root.after(100, self.poll)
+        defaults.visual = sys.platform == 'win32'
+        self.vars = {k:(tk.BooleanVar(value=v) if isinstance(v,bool) else tk.StringVar(value=str(v))) for k,v in defaults.dict().items()}
+        ui_font = 'Segoe UI' if sys.platform == 'win32' else 'Helvetica'
+        bg,card,text,muted,accent = '#0c1220','#151f30','#edf4fa','#91a4ba','#65dfc2'
+        root.configure(bg=bg)
+        st=ttk.Style();st.theme_use('clam')
+        st.configure('.',font=(ui_font,10))
+        st.configure('TFrame',background=bg)
+        st.configure('Card.TFrame',background=card)
+        st.configure('TLabel',background=bg,foreground=text)
+        st.configure('Muted.TLabel',foreground=muted)
+        st.configure('Card.TLabel',background=card,foreground=text)
+        st.configure('TCheckbutton',background=bg,foreground=text,padding=5)
+        st.map('TCheckbutton',background=[('active',bg)])
+        st.configure('TEntry',fieldbackground=card,foreground=text,insertcolor=text,padding=7,bordercolor='#25364b',lightcolor='#25364b',darkcolor='#25364b')
+        st.configure('TButton',background=card,foreground=text,borderwidth=0,padding=(14,9))
+        st.map('TButton',background=[('active','#253952')])
+        st.configure('Accent.TButton',background=accent,foreground=bg,font=(ui_font,11,'bold'))
+        st.map('Accent.TButton',background=[('active','#8befd7'),('disabled','#354958')])
+        st.configure('Stop.TButton',foreground='#ff9d9d')
+        st.configure('TNotebook',background=bg,borderwidth=0,bordercolor=bg,lightcolor=bg,darkcolor=bg)
+        st.configure('Horizontal.TScale',background=card,troughcolor='#25364b',bordercolor=bg)
+        st.configure('Vertical.TScrollbar',background='#25364b',troughcolor=bg,arrowcolor=muted,bordercolor=bg)
+        st.configure('TNotebook.Tab',background=card,foreground=muted,padding=(24,10))
+        st.map('TNotebook.Tab',background=[('selected','#24384b')],foreground=[('selected',accent)])
+        shell=ttk.Frame(root,padding=24);shell.pack(fill='both',expand=True)
+        header=ttk.Frame(shell);header.pack(fill='x')
+        ttk.Label(header,text='Fishing Lab',font=(ui_font,25,'bold')).pack(side='left')
+        ttk.Label(header,text='PIXEL WORLDS  /  DESKTOP',style='Muted.TLabel').pack(side='right')
+        ttk.Label(shell,text='Cast. Track. Collect. Repeat.',style='Muted.TLabel').pack(anchor='w',pady=(2,18))
+        summary=ttk.Frame(shell,style='Card.TFrame',padding=14);summary.pack(fill='x')
+        self.status=tk.StringVar(value='Ready — dry run enabled')
+        ttk.Label(summary,textvariable=self.status,style='Card.TLabel',wraplength=680).pack(anchor='w')
+        self.metrics=tk.StringVar(value='Tracker — FPS   |   0 completed cycles')
+        ttk.Label(summary,textvariable=self.metrics,style='Card.TLabel',font=(ui_font,9)).pack(anchor='w',pady=(6,0))
+        self.last_metrics='Tracker — FPS';self.completed=0
+        notebook=ttk.Notebook(shell);notebook.pack(fill='both',expand=True,pady=16)
+        notebook.configure(height=330)
+        def page(label):
+            outer=ttk.Frame(notebook);notebook.add(outer,text=label)
+            canvas=tk.Canvas(outer,bg=bg,highlightthickness=0)
+            scroll=ttk.Scrollbar(outer,orient='vertical',command=canvas.yview)
+            canvas.configure(yscrollcommand=scroll.set)
+            scroll.pack(side='right',fill='y');canvas.pack(side='left',fill='both',expand=True)
+            inner=ttk.Frame(canvas,padding=16)
+            item=canvas.create_window((0,0),window=inner,anchor='nw')
+            inner.bind('<Configure>',lambda e:canvas.configure(scrollregion=canvas.bbox('all')))
+            canvas.bind('<Configure>',lambda e:canvas.itemconfigure(item,width=e.width))
+            def wheel(e):
+                if canvas.winfo_height() < inner.winfo_reqheight():
+                    canvas.yview_scroll(-1 if e.delta > 0 else 1,'units')
+            # Bind only when the pointer is over this page; leave other windows alone.
+            outer.bind('<Enter>',lambda e:canvas.bind_all('<MouseWheel>',wheel))
+            outer.bind('<Leave>',lambda e:canvas.unbind_all('<MouseWheel>'))
+            return inner
+        simple=page('Simple')
+        advanced=page('Advanced')
+        def fields(parent,items):
+            panel=ttk.Frame(parent);panel.pack(fill='x',pady=(6,12))
+            for i,(key,label) in enumerate(items):
+                row,col=divmod(i,2);col*=2
+                ttk.Label(panel,text=label).grid(row=row,column=col,sticky='w',padx=(0,12),pady=6)
+                ttk.Entry(panel,textvariable=self.vars[key],width=10).grid(row=row,column=col+1,sticky='ew',padx=(0,18),pady=6)
+            panel.columnconfigure(1,weight=1);panel.columnconfigure(3,weight=1)
+        def toggle(parent,key,label):
+            ttk.Checkbutton(parent,text=label,variable=self.vars[key]).pack(anchor='w')
+        ttk.Label(simple,text='CAST POINT',style='Muted.TLabel').pack(anchor='w')
+        fields(simple,[('cast_x','Screen X'),('cast_y','Screen Y')])
+        ttk.Button(simple,text='Pick bait position · 3 second countdown',command=self.pick_cast).pack(fill='x')
+        ttk.Label(simple,text='Hover over a bait icon during the countdown.',style='Muted.TLabel').pack(anchor='w',pady=(7,14))
+        fields(simple,[('cycles','Cycle limit'),('minutes','Time limit (min)')])
+        toggle(simple,'dry_run','Dry run — observe without sending input')
+        toggle(simple,'auto_cast','Automatically cast at my saved point')
+        toggle(simple,'repeat','Take fish and repeat')
+        ttk.Label(simple,text='1920 × 1080 · maximum zoom · keep the game focused',style='Muted.TLabel').pack(anchor='w',pady=(14,0))
+        ttk.Label(advanced,text='TRACKING',style='Muted.TLabel').pack(anchor='w')
+        fields(advanced,[('tracker_hz','Target refresh (Hz)'),('deadband','Center tolerance (px)'),('countdown','Start delay (s)'),('cooldown','Recast delay (s)'),('visual_timeout','Strike timeout (s)')])
+        ttk.Label(advanced,text='60 Hz default · 15–120 Hz supported. Actual FPS depends on your PC.\nLower center tolerance starts corrections sooner; it does not change game speed.',style='Muted.TLabel',wraplength=650).pack(anchor='w')
+        ttk.Label(advanced,text='APPEARANCE',style='Muted.TLabel').pack(anchor='w',pady=(18,8))
+        ttk.Label(advanced,text='Window opacity · 85% to 100%',style='Muted.TLabel').pack(anchor='w')
+        ttk.Scale(advanced,from_=85,to=100,variable=self.vars['opacity'],command=self.apply_opacity).pack(fill='x',pady=8)
+        ttk.Label(advanced,text='TRACKING MODE',style='Muted.TLabel').pack(anchor='w',pady=(16,8))
+        toggle(advanced,'visual','Visual tracking (Windows)')
+        toggle(advanced,'pixel','Pixel bite trigger (when visual tracking is off)')
+        fields(advanced,[('cast','Timed cast action'),('reel','Timed reel action'),('hold','Input hold (s)'),('bite_wait','Timed bite wait (s)'),('x','Bite pixel X'),('y','Bite pixel Y'),('color','Bite color'),('tolerance','Color tolerance')])
+        ttk.Button(advanced,text='Sample bite pixel · 3 seconds',command=self.sample).pack(anchor='w')
+        ttk.Label(advanced,text='Actions: space, enter, letters, digits, arrows, mouse:left/right.\nmacOS uses timed/pixel mode; grant Accessibility and Screen Recording access.',style='Muted.TLabel',wraplength=640).pack(anchor='w',pady=10)
+        actions=ttk.Frame(shell);actions.pack(fill='x')
+        self.start_button=ttk.Button(actions,text='Start session',style='Accent.TButton',command=self.start)
+        self.start_button.pack(side='left',fill='x',expand=True)
+        ttk.Button(actions,text='Stop · F8',style='Stop.TButton',command=self.stop).pack(side='left',padx=(10,0))
+        utilities=ttk.Frame(shell);utilities.pack(fill='x',pady=10)
+        for title,fn in [('Load profile',self.load),('Save profile',self.save),('Export log',self.export)]:
+            ttk.Button(utilities,text=title,command=fn).pack(side='left',padx=(0,8))
+        self.log=tk.Text(shell,height=4,bg='#090e18',fg=muted,font=('Consolas' if sys.platform == 'win32' else 'Courier',9),state='disabled',relief='flat',highlightthickness=0,padx=10,pady=8,wrap='word')
+        self.log.pack(fill='x')
+        ttk.Label(shell,text='F8 stops globally · Escape stops while this window is focused',style='Muted.TLabel',font=(ui_font,9)).pack(anchor='w',pady=(8,0))
+        root.bind('<Escape>',lambda e:self.stop())
+        root.protocol('WM_DELETE_WINDOW',self.close)
+        root.after(100,self.poll)
+
+    def apply_opacity(self, value=None):
+        try:
+            self.root.attributes('-alpha',float(self.vars['opacity'].get())/100)
+        except (tk.TclError,ValueError):
+            pass
 
     def profile(self):
         values = {k:v.get() for k,v in self.vars.items()}
-        for key in ('hold','countdown','bite_wait','cooldown','minutes','visual_timeout'):
+        for key in ('hold','countdown','bite_wait','cooldown','minutes','visual_timeout','deadband','opacity'):
             values[key] = float(values[key])
-        for key in ('cycles','x','y','tolerance','cast_x','cast_y'):
+        for key in ('cycles','x','y','tolerance','cast_x','cast_y','tracker_hz'):
             values[key] = int(values[key])
         return Profile(**values).validate()
 
@@ -95,13 +156,16 @@ class App:
                 import pyautogui as backend
                 from pynput import keyboard
                 backend.FAILSAFE = True
-                backend.PAUSE = .03
+                backend.PAUSE = 0 if p.visual else .03
                 if p.pixel and not p.visual:
                     if not backend.onScreen(p.x, p.y):
                         raise ValueError('Bite pixel must be on the primary display')
                     backend.pixel(p.x, p.y)  # Check screen access before countdown.
                 self.listener = keyboard.Listener(on_press=lambda key: self.stop_event.set() if key == keyboard.Key.f8 else None)
                 self.listener.start()
+            self.completed=0
+            self.last_metrics='Tracker — FPS'
+            self.metrics.set('Tracker — FPS   |   0 completed cycles')
             self.start_button.configure(state='disabled')
             self.worker = threading.Thread(target=run, args=(p,self.stop_event,self.emit,backend), daemon=True)
             self.worker.start()
@@ -114,8 +178,17 @@ class App:
         self.stop_event.set()
 
     def poll(self):
-        while not self.queue.empty():
+        for _ in range(150):
+            if self.queue.empty():
+                break
             kind, message = self.queue.get_nowait()
+            if kind == 'metrics':
+                self.last_metrics=message
+                self.metrics.set(f'{message}   |   {self.completed} cycles')
+                continue
+            if kind == 'cycle':
+                self.completed=int(message)
+                self.metrics.set(f'{self.last_metrics}   |   {self.completed} cycles')
             timestamp = datetime.now().isoformat(timespec='milliseconds')
             self.rows.append((timestamp,kind,message))
             self.log.configure(state='normal')
@@ -192,6 +265,7 @@ class App:
             p = Profile(**json.loads(Path(path).read_text(encoding='utf-8'))).validate()
             for key, value in p.dict().items():
                 self.vars[key].set(value)
+            self.apply_opacity()
         except Exception as exc:
             messagebox.showerror('Load failed',str(exc))
 
@@ -213,15 +287,35 @@ class App:
         self.root.destroy()
 
 if __name__ == '__main__':
+    import sys
+    if sys.platform == 'win32':
+        import ctypes
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        except (AttributeError, OSError):
+            pass
     root = tk.Tk()
-    App(root)
+    app = App(root)
     import sys
     if '--smoke-test' in sys.argv:
         import pyautogui
         from vision import Detector
+        from screen_capture import FastCapture
         Detector()
+        capture=FastCapture(check_resolution=False)
+        capture.grab()
+        capture.close()
         from pynput import keyboard, mouse
         root.update()
+        app.vars['cast_x'].set('1185')
+        app.vars['cast_y'].set('755')
+        app.vars['tracker_hz'].set('120')
+        assert app.profile().tracker_hz == 120
+        app.vars['opacity'].set('90')
+        app.apply_opacity()
+        root.update()
+        if sys.platform == 'win32':
+            assert abs(root.attributes('-alpha') - .9) < .02
         root.destroy()
     else:
         root.mainloop()

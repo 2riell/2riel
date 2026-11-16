@@ -15,6 +15,13 @@ def green(image):
     return ((g > 110) & (g > r * 1.4) & (g > b * 1.35)).astype('uint8') * 255
 
 
+def tracking_mask(image):
+    # Track the silhouette/outline even when they change from green to red.
+    b,g,r = cv2.split(image.astype(np.int16))
+    bright = np.maximum(r,g)
+    return ((bright > 100) & (bright > b*1.35) & (bright-b > 45)).astype('uint8')*255
+
+
 def template(name):
     return np.frombuffer(zlib.decompress(base64.b64decode(getattr(templates, name+'_DATA'))), dtype='uint8').reshape(getattr(templates, name+'_SHAPE'))
 
@@ -30,12 +37,12 @@ class Observation:
     target_width: float = 0
 
 
-def direction(obs):
+def direction(obs, deadband_pixels=8):
     if obs.fish_x is None or obs.target_x is None:
         return None
     # Release inside the central zone to reduce oscillation.
     error = obs.fish_x - obs.target_x
-    deadband = max(6, obs.target_width * .18)
+    deadband = deadband_pixels
     return 'd' if error > deadband else 'a' if error < -deadband else None
 
 
@@ -50,6 +57,12 @@ class Detector:
     def inspect(self, frame):
         if frame.shape[:2] != (1080, 1920):
             raise ValueError('Visual assist requires a 1920×1080 game view at maximum zoom')
+        # Fast path: once acquired, process only the small fishing track.
+        if self.last_bar is not None:
+            tracked = self.track(frame,self.last_bar)
+            if tracked is not None:
+                return tracked
+            self.last_bar = None
         # Require both the catch title and Take Fish button at the dialog spacing.
         gray = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
         _,score,_,point = cv2.minMaxLoc(cv2.matchTemplate(gray,self.caught,cv2.TM_CCOEFF_NORMED))
@@ -84,31 +97,35 @@ class Detector:
             self.last_bar = candidates[0]
         elif self.last_bar is None:
             return obs
-        x,y,w,h = self.last_bar
+        return self.track(frame,self.last_bar) or obs
+
+    def track(self, frame, bar):
+        x,y,w,h = bar
         strip = frame[y+15:y+h-15,x+10:x+w-10].astype(np.int16)
         b,g,r = cv2.split(strip)
         if ((b > 120) & (b > r*1.4) & (g > 60)).mean() < .60:
-            self.last_bar = None
-            return obs
-        obs.bar = (x,y,w,h)
-        # The target outline has a long green horizontal edge at the top.
-        left, right = max(0,x-80), min(1920,x+w+80)
-        band = mask[max(0,y-6):y+15,left:right]
+            return None
+        obs = Observation(bar=bar)
+        left,right = max(0,x-80),min(1920,x+w+80)
+        top = max(0,y-6)
+        mask = tracking_mask(frame[top:y+h,left:right])
+        band = mask[:y+15-top]
         columns = np.flatnonzero((band > 0).sum(axis=0) >= 5)
         if len(columns) < 50:
             return obs
-        groups = np.split(columns, np.where(np.diff(columns) > 3)[0]+1)
+        groups = np.split(columns,np.where(np.diff(columns)>3)[0]+1)
         groups = [a for a in groups if 65 <= a[-1]-a[0] <= 160]
         if len(groups) != 1:
             return obs
         target = groups[0]
-        obs.target_x = left + (target[0]+target[-1])/2
+        obs.target_x = left+(target[0]+target[-1])/2
         obs.target_width = float(target[-1]-target[0])
-        roi = mask[y:y+h,x:x+w]
-        matches = [cv2.minMaxLoc(cv2.matchTemplate(roi,t,cv2.TM_CCOEFF_NORMED)) for t in (self.fish, cv2.flip(self.fish,1))]
-        _, confidence, _, location = max(matches,key=lambda m:m[1])
+        # Search the FULL track; distance from the target does not limit detection.
+        roi = mask[y-top:y-top+h,x-left:x-left+w]
+        matches = [cv2.minMaxLoc(cv2.matchTemplate(roi,t,cv2.TM_CCOEFF_NORMED)) for t in (self.fish,cv2.flip(self.fish,1))]
+        _,confidence,_,location = max(matches,key=lambda m:m[1])
         if confidence >= .70:
-            obs.fish_x = x + location[0] + self.fish.shape[1]/2
+            obs.fish_x = x+location[0]+self.fish.shape[1]/2
         return obs
 
 
@@ -141,6 +158,11 @@ def run_visual(p, stop, emit, backend):
     take_point = None
     close_since = None
     collected_at = None
+    capture = None
+    stats_start = time.monotonic()
+    stats_frames = 0
+    stats_processing = 0.0
+    requested_period = 1.0/p.tracker_hz
 
     def release():
         nonlocal held
@@ -175,6 +197,9 @@ def run_visual(p, stop, emit, backend):
         return True
 
     try:
+        if getattr(backend, '__name__', '') == 'pyautogui':
+            from screen_capture import FastCapture
+            capture = FastCapture()
         emit('state', 'Focus Pixel Worlds — casting after countdown' if p.auto_cast else 'Visual assist: focus Pixel Worlds and cast manually')
         if stop.wait(p.countdown):
             return
@@ -187,7 +212,7 @@ def run_visual(p, stop, emit, backend):
                     break
                 continue
             before = time.monotonic()
-            frame = cv2.cvtColor(np.asarray(backend.screenshot()),cv2.COLOR_RGB2BGR)
+            frame = capture.grab() if capture else cv2.cvtColor(np.asarray(backend.screenshot()),cv2.COLOR_RGB2BGR)
             obs = detector.inspect(frame)
             # Drop slow captures instead of steering using an old frame.
             if time.monotonic()-before > .5 or not focused_game() or stop.is_set():
@@ -195,6 +220,11 @@ def run_visual(p, stop, emit, backend):
                 take_since = close_since = None
                 continue
             now = time.monotonic()
+            stats_frames += 1
+            stats_processing += now-before
+            if now-stats_start >= 1:
+                emit('metrics', f'{stats_frames/(now-stats_start):.1f} FPS | {1000*stats_processing/stats_frames:.1f} ms capture + detect')
+                stats_start,stats_frames,stats_processing = now,0,0.0
             # Collection is separate from tracking: loss of the bar is not success.
             if obs.take is not None:
                 release()
@@ -214,7 +244,7 @@ def run_visual(p, stop, emit, backend):
                         emit('state','Waiting for collection dialog to close')
                         state = 'collecting'
                         collected_at = now
-                stop.wait(.03)
+                stop.wait(max(0,requested_period-(time.monotonic()-before)))
                 continue
             take_since = None
             take_point = None
@@ -225,7 +255,7 @@ def run_visual(p, stop, emit, backend):
                     if now-collected_at > 8:
                         emit('timeout','Catch dialog still visible — stopped')
                         break
-                    stop.wait(.03)
+                    stop.wait(max(0,requested_period-(time.monotonic()-before)))
                     continue
                 if close_since is None:
                     close_since = now
@@ -237,11 +267,11 @@ def run_visual(p, stop, emit, backend):
                     emit('state','Fish dialog closed — cooldown before next cast')
                     state = 'cooldown'
                     last_seen = now
-                stop.wait(.03)
+                stop.wait(max(0,requested_period-(time.monotonic()-before)))
                 continue
             if state == 'cooldown':
                 if now-last_seen < p.cooldown:
-                    stop.wait(.03)
+                    stop.wait(max(0,requested_period-(time.monotonic()-before)))
                     continue
                 state = 'waiting'
                 cast_sent = False
@@ -251,7 +281,7 @@ def run_visual(p, stop, emit, backend):
                 detector.last_bar = None
             if obs.caught:
                 release()
-                stop.wait(.03)
+                stop.wait(max(0,requested_period-(time.monotonic()-before)))
                 continue
             if p.auto_cast and not cast_sent and state == 'waiting':
                 # Attach to a strike/minigame already in progress without clicking.
@@ -278,7 +308,7 @@ def run_visual(p, stop, emit, backend):
                     emit('state', 'Tracking fish — A / D')
                 state = 'tracking'
                 last_seen = now
-                key = direction(obs)
+                key = direction(obs,p.deadband)
                 if key != held:
                     release()
                     if key and not p.dry_run and focused_game() and not stop.is_set():
@@ -315,9 +345,13 @@ def run_visual(p, stop, emit, backend):
                 elif state == 'struck' and now-last_seen > 5:
                     emit('timeout','Fishing track did not appear after strike')
                     break
-            stop.wait(.03)
+            stop.wait(max(0,requested_period-(time.monotonic()-before)))
     except Exception as exc:
         emit('error',f'{type(exc).__name__}: {exc}')
     finally:
-        release()
+        try:
+            release()
+        finally:
+            if capture is not None:
+                capture.close()
         emit('done',str(completed))

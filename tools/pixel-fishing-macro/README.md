@@ -2,6 +2,16 @@
 
 Local Python desktop macro for macOS and Windows. Sends configurable keyboard or mouse inputs, with timed cycles or a calibrated pixel-color bite trigger. This is an independent QA tool, not an official Pixel Worlds integration.
 
+## Simple and Advanced settings
+
+The redesigned dark window opens on **Simple**: cast position picker, cycle/time limits, Dry run, automatic casting, and repeat. **Advanced** contains tracker tuning, timeouts, timed/pixel controls, and **Window opacity (85–100%)**. Opacity is optional and defaults to fully opaque; it makes the entire window translucent rather than adding a blur effect. Settings persist in saved profiles. New Windows sessions default to visual mode; older profiles preserve their selected mode.
+
+The tracker now targets **60 Hz**, adjustable from **15 to 120 Hz** in Advanced. The status card shows measured FPS and capture/detection time. Actual refresh depends on hardware, screen capture and game rendering. MSS replaces the previous screenshot method, unnecessary input pauses are removed in visual mode, and the detector searches only the fishing track after it has located it. When the track disappears, it resumes searching for strike/catch dialogs.
+
+Recognition now accepts green, red and yellow fish/target graphics across the entire track, including large distances between the fish and target. Center tolerance defaults to **8 pixels**, replacing the earlier roughly 21-pixel neutral zone. A/D stays held until the target reaches that zone or tracking/focus is lost. This changes reaction latency, not the game's maximum movement speed; use the actual FPS display to diagnose slow capture.
+
+Offline benchmark on 45 recorded tracking frames: median detection processing **84.15 ms before → 2.39 ms after**, with 42/45 successful fish detections in both runs. These figures exclude screen capture, input delivery, and the game, and do not establish live catch performance.
+
 ## Visual assist (experimental, Windows)
 
 Enable **Visual assist** and **Automatically left-click the saved cast point**. Click **Pick cast point in 3s**, then move the cursor over either bait icon in the game. The app saves the pointer's X/Y position without clicking. Alternatively type Cast click X/Y manually. Use **Save profile** to keep the point for later sessions.
@@ -12,7 +22,7 @@ Use the primary display at **1920×1080 and maximum zoom**. The Windows foregrou
 
 Enable **Collect fish and repeat** to run the full cycle: cast → Space at STRIKE → A/D tracking → wait for the Fish Caught dialog → click Take Fish → confirm the dialog closes → cooldown → cast again. Disable it to collect once and stop. Maximum cycles and session time limit bound the loop. The catch animation follows the minigame in the reference recording; no extra completion key is sent. The app releases A/D when the track disappears, waits up to 12 seconds for the catch dialog, and clicks only after recognizing both its title and Take Fish button. It clicks Take Fish once, waits up to 8 seconds for the dialog to close, and stops on a timeout. A cycle counts a recognized collection dialog followed by its disappearance, not an independent inventory check. The strike timeout defaults to 60 seconds; a missed or ineffective cast stops at that timeout without repeated clicks. The overall session time limit still applies. Uncheck automatic casting to cast manually. macOS retains the previous timed/pixel modes; visual assist supports Windows only.
 
-Validation: 25 automated tests pass, including cast coordinates, one-click behavior, timeout, dry run, focus loss, input release, title/button recognition, repeat cycles, collection timeout, and cycle limits. Offline replay detected Take Fish in 7 sampled frames of the supplied recording, with no detections outside the catch dialog. Offline recognition was checked on the supplied recorded round, not live gameplay. Live casting and steering still need a supervised trial on your computer.
+Validation: 28 automated tests pass, including cast coordinates, one-click behavior, timeout, dry run, focus loss, input release, title/button recognition, repeat cycles, collection timeout, and cycle limits. Additional tests cover distant fish at both ends of the track, red/yellow graphics, center tolerance and tracker settings. Offline replay detected Take Fish in 7 sampled frames of the supplied recording, with no detections outside the catch dialog. Offline recognition was checked on the supplied recorded round, not live gameplay. Live casting and steering still need a supervised trial on your computer.
 
 ## Windows app download
 

@@ -52,7 +52,7 @@ class VisionTests(unittest.TestCase):
                 cancelled=False
                 def is_set(self): return self.cancelled
                 def wait(self,delay):
-                    if delay==.03: self.cancelled=True
+                    if delay<1: self.cancelled=True
                     return self.cancelled
             class Backend:
                 FAILSAFE=True
@@ -202,3 +202,28 @@ class CollectionTests(unittest.TestCase):
         clicks,events=self.simulate(dry=True)
         self.assertEqual(clicks,[])
         self.assertEqual(events[-1],('done','2'))
+
+class FastTrackingTests(unittest.TestCase):
+    def test_far_fish_both_ends_and_red_yellow_graphics(self):
+        for fish,target,expected in [(620,1210,'a'),(1300,700,'d')]:
+            for color in [(0,220,0),(0,0,220),(0,220,220)]:
+                im=scene(fish,target)
+                original=(im[:,:,1]>150)&(im[:,:,0]<50)
+                im[original]=color
+                d=Detector();o=d.inspect(im)
+                self.assertIsNotNone(o.fish_x,(fish,target,color))
+                self.assertAlmostEqual(o.fish_x,fish,delta=3)
+                self.assertAlmostEqual(o.target_x,target,delta=3)
+                self.assertEqual(direction(o),expected)
+                # Cached-track path must also recognize a distant fish.
+                self.assertEqual(direction(d.inspect(im)),expected)
+
+    def test_small_corrections_and_deadband(self):
+        o=Observation(fish_x=975,target_x=960,target_width=120)
+        self.assertEqual(direction(o,8),'d')
+        self.assertIsNone(direction(o,20))
+
+    def test_tracker_settings_validation(self):
+        for kwargs in ({'tracker_hz':0},{'tracker_hz':121},{'deadband':float('nan')},{'opacity':30}):
+            with self.assertRaises(ValueError):Profile(**kwargs).validate()
+        Profile(tracker_hz=120,deadband=2,opacity=85).validate()

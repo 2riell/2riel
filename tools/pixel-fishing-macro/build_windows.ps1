@@ -8,7 +8,7 @@ $python = Join-Path $PSScriptRoot '.build-venv\Scripts\python.exe'
 Check-Exit
 & $python -m unittest discover -v
 Check-Exit
-& $python -m PyInstaller --noconfirm --clean --onefile --windowed --name FishingLab --hidden-import pynput.keyboard._win32 --hidden-import pynput.mouse._win32 app.py
+& $python -m PyInstaller --noconfirm --clean --onefile --windowed --name FishingLab --collect-submodules mss.windows --hidden-import pynput.keyboard._win32 --hidden-import pynput.mouse._win32 app.py
 Check-Exit
 $exe = Join-Path $PSScriptRoot 'dist\FishingLab.exe'
 $process = Start-Process -FilePath $exe -ArgumentList '--smoke-test' -PassThru

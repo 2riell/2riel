@@ -24,9 +24,12 @@ class Profile:
     y: int = 0
     color: str = '#ffffff'
     tolerance: int = 25
+    tracker_hz: int = 60
+    deadband: float = 8
+    opacity: float = 100
 
     def validate(self):
-        for field, low, high in [('hold', .02, 2), ('countdown', 1, 60), ('bite_wait', .1, 120), ('cooldown', .1, 120), ('minutes', .01, 120), ('visual_timeout', 5, 120)]:
+        for field, low, high in [('hold', .02, 2), ('countdown', 1, 60), ('bite_wait', .1, 120), ('cooldown', .1, 120), ('minutes', .01, 120), ('visual_timeout', 5, 120), ('tracker_hz', 15, 120), ('deadband', 2, 40), ('opacity', 85, 100)]:
             value = float(getattr(self, field))
             if not low <= value <= high:
                 raise ValueError(f'{field} must be between {low} and {high}')
