@@ -149,6 +149,7 @@ class App:
         ttk.Label(prof,text='Keep your coordinates and settings.',style='Small.Card.TLabel').pack(anchor='w',pady=(10,0))
         track=cardbox(advanced,'Tracking & timing')
         fields(track,[('tracker_hz','Refresh rate (Hz)'),('deadband','Center tolerance (px)'),('countdown','Start delay (s)'),('cooldown','Recast delay (s)'),('visual_timeout','Strike timeout (s)')])
+        toggle(track,'chase_lost_fish','Keep chasing when the fish is lost')
         toggle(track,'wait_for_strike','Wait for STRIKE without a bite timeout')
         ttk.Label(track,text='15–120 Hz. Actual FPS depends on your PC.',style='Small.Card.TLabel').pack(anchor='w',pady=(5,0))
         appearance=cardbox(advanced,'Appearance')

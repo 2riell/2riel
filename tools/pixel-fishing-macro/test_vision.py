@@ -440,3 +440,32 @@ class MotionGapTests(unittest.TestCase):
         self.assertEqual(m.key(Observation(bar=bar,fish_x=1250),1.1,8),'d')
         self.assertIsNone(m.key(Observation(),1.11,8))
         self.assertIsNone(m.key(Observation(bar=bar,fish_x=1250),1.12,8))
+
+
+class PersistentChaseTests(unittest.TestCase):
+    def test_hold_during_long_dropout_then_reverse_immediately(self):
+        from vision import MotionSteering
+        m=MotionSteering();bar=(549,100,822,70)
+        self.assertEqual(m.key(Observation(bar=bar,fish_x=1250,target_x=900),1,8,True),'d')
+        for t in (1.1,2,10):
+            self.assertEqual(m.key(Observation(bar=bar,target_x=1300),t,8,True),'d')
+        self.assertEqual(m.key(Observation(bar=bar,fish_x=600,target_x=1300),10.01,8,True),'a')
+        self.assertEqual(m.key(Observation(bar=bar,target_x=600),20,8,True),'a')
+        self.assertIsNone(m.key(Observation(),20.01,8,True))
+        self.assertIsNone(m.key(Observation(bar=bar),20.02,8,True))
+
+    def test_centered_moving_fish_uses_latest_heading(self):
+        from vision import MotionSteering
+        m=MotionSteering();bar=(549,100,822,70)
+        m.key(Observation(bar=bar,fish_x=950,target_x=1000),1,8,True)
+        m.key(Observation(bar=bar,fish_x=1000,target_x=1000),1.05,8,True)
+        self.assertEqual(m.key(Observation(bar=bar,target_x=1000),2,8,True),'d')
+
+    def test_disabled_chase_still_expires(self):
+        from vision import MotionSteering
+        m=MotionSteering();bar=(549,100,822,70)
+        m.key(Observation(bar=bar,fish_x=1250,target_x=900),1,8,False)
+        self.assertIsNone(m.key(Observation(bar=bar,target_x=900),2,8,False))
+
+    def test_new_option_defaults_on_for_old_profiles(self):
+        self.assertTrue(Profile(**{'tracker_hz':60}).chase_lost_fish)

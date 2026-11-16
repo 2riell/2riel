@@ -198,12 +198,14 @@ class MotionSteering:
     def __init__(self):
         self.samples={}
         self.bar=None
+        self.chase_direction=None
 
     def reset(self):
         self.samples.clear()
         self.bar=None
+        self.chase_direction=None
 
-    def key(self,obs,now,deadband):
+    def key(self,obs,now,deadband,chase_lost=False):
         if obs.bar is None:
             self.reset()
             return None
@@ -218,6 +220,16 @@ class MotionSteering:
             if old is not None and 0<now-old[1]<=.2:
                 velocity=float(np.clip((value-old[0])/(now-old[1]),-1800,1800))
             self.samples[name]=(value,now,velocity)
+        if obs.fish_x is not None:
+            target=self.samples.get('target')
+            # The current fish side overrides its old heading immediately.
+            # Near the center, its measured velocity supplies the escape direction.
+            side=direction(Observation(fish_x=obs.fish_x,target_x=target[0]),deadband) if target is not None and now-target[1]<=.2 else None
+            velocity=self.samples['fish'][2]
+            self.chase_direction=side or ('d' if velocity>0 else 'a' if velocity<0 else None)
+        elif chase_lost and self.chase_direction is not None:
+            # Hold continuously until a fresh fish observation or the track ends.
+            return self.chase_direction
         positions={}
         for name in ('fish','target'):
             sample=self.samples.get(name)
@@ -390,6 +402,7 @@ def run_visual(p, stop, emit, backend):
                             stop.wait(.06)
                         finally:
                             release()
+                    motion.reset()
                     catch_pressed = True
                     state = 'await_catch'
                     last_seen = now
@@ -399,6 +412,7 @@ def run_visual(p, stop, emit, backend):
             # Collection is separate from tracking: loss of the bar is not success.
             if obs.take is not None:
                 release()
+                motion.reset()
                 close_since = None
                 if state == 'collecting':
                     if now-collected_at > 8:
@@ -501,10 +515,10 @@ def run_visual(p, stop, emit, backend):
                     if complete:
                         emit('state','Tracking fish — A / D')
                     else:
-                        emit('state','Reacquiring — bridging brief detection gaps')
+                        emit('state','Reacquiring — chasing last known side' if p.chase_lost_fish else 'Reacquiring — bridging brief detection gaps')
                 state=next_state
                 last_seen=now
-                key=motion.key(obs,now,p.deadband)
+                key=motion.key(obs,now,p.deadband,p.chase_lost_fish)
                 if key != held:
                     release()
                     if key and not p.dry_run and focused_game() and not stop.is_set():

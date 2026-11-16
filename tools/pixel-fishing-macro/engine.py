@@ -30,6 +30,7 @@ class Profile:
     tolerance: int = 25
     tracker_hz: int = 60
     deadband: float = 8
+    chase_lost_fish: bool = True
     opacity: float = 100
 
     def validate(self):
