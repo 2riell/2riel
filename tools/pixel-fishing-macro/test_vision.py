@@ -126,7 +126,7 @@ class CastingTests(unittest.TestCase):
         self.assertEqual(actions,[])
 
     def test_requires_valid_coordinates_only_when_automatic(self):
-        for x,y in [(-1,755),(1920,755),(1185,1080)]:
+        for x,y in [(-1,755),(32768,755),(1185,32768)]:
             with self.assertRaises(ValueError): Profile(visual=True,cast_x=x,cast_y=y).validate()
         Profile(visual=True,auto_cast=False).validate()
         Profile(visual=True,cast_x=1185,cast_y=755).validate()

@@ -73,8 +73,8 @@ class Detector:
         self.take_mask[10:60,15:221] = 0
 
     def inspect(self, frame):
-        if frame.shape[:2] != (1080, 1920):
-            raise ValueError('Visual assist requires a 1920×1080 game view at maximum zoom')
+        if frame.shape[1] != 1920 or not 1060 <= frame.shape[0] <= 1220:
+            raise ValueError('Expected a normalized 16:9 or 16:10 game view')
         # Fast path: once acquired, process only the small fishing track.
         if self.last_bar is not None:
             tracked = self.track(frame,self.last_bar)
@@ -88,14 +88,14 @@ class Detector:
         if caught:
             hx,hy = point
             left,top = max(0,hx-80), max(0,hy+440)
-            roi = gray[top:min(1080,hy+560),left:min(1920,hx+240)]
+            roi = gray[top:min(frame.shape[0],hy+560),left:min(1920,hx+240)]
             if roi.shape[0] >= self.take.shape[0] and roi.shape[1] >= self.take.shape[1]:
                 _,confidence,_,location = cv2.minMaxLoc(cv2.matchTemplate(roi,self.take,cv2.TM_CCOEFF_NORMED))
                 if confidence >= .80:
                     return Observation(caught=True,take=(left+location[0]+self.take.shape[1]//2,top+location[1]+self.take.shape[0]//2))
         # Ingredient results share the dialog shell but use different title/button text.
         # Match the button surround, then require the cyan panel on both sides.
-        lower=frame[250:1040].astype(np.int16)
+        lower=frame[250:frame.shape[0]-40].astype(np.int16)
         bb,gg,rr=cv2.split(lower)
         lime=((gg>130)&(gg>bb*1.4)&(rr>70)).astype('uint8')*255
         contours,_=cv2.findContours(lime,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
@@ -114,11 +114,11 @@ class Detector:
             if confidence >= .95 and self.item_shell(frame,cx,cy):
                 return Observation(item=True,caught=True,take=(cx,cy))
         # Search the upper half, independent of the character's horizontal position.
-        mask = green(frame[:540])
+        mask = green(frame[:frame.shape[0]//2])
         score = cv2.minMaxLoc(cv2.matchTemplate(mask, self.strike, cv2.TM_CCOEFF_NORMED))[1]
         obs = Observation(caught=caught,strike=score >= .78)
         # Locate the wide white frame surrounding the blue fishing track.
-        white = cv2.inRange(frame[:400], (205,205,205), (255,255,255))
+        white = cv2.inRange(frame[:max(400,frame.shape[0]//2)], (205,205,205), (255,255,255))
         contours, _ = cv2.findContours(white, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         boxes = [cv2.boundingRect(c) for c in contours]
         parts = [b for b in boxes if 50 <= b[3] <= 90 and b[2] >= 30]
@@ -140,7 +140,7 @@ class Detector:
     def item_shell(self,frame,cx,cy):
         # Ingredients can use a shorter/narrower panel. Validate paired cyan
         # borders immediately above the button, rather than a fish-sized panel.
-        if not (410 <= cx < 1510 and 200 <= cy < 1040):
+        if not (410 <= cx < 1510 and 200 <= cy < frame.shape[0]-40):
             return False
         patch=frame[cy-150:cy-50,cx-400:cx+401].astype(np.int16)
         b,g,r=cv2.split(patch)
@@ -176,7 +176,7 @@ class Detector:
             obs.target_width=float(target[-1]-target[0])
         # Search the full track plus edge padding, independent of the target.
         fish_left,fish_right=max(0,x-40),min(1920,x+w+40)
-        fish_top,fish_bottom=max(0,y-12),min(1080,y+h+12)
+        fish_top,fish_bottom=max(0,y-12),min(frame.shape[0],y+h+12)
         fish_frame=frame[fish_top:fish_bottom,fish_left:fish_right]
         roi=tracking_mask(fish_frame)
         matches = [cv2.minMaxLoc(cv2.matchTemplate(roi,t,cv2.TM_CCOEFF_NORMED)) for t in (self.fish,cv2.flip(self.fish,1))]
@@ -266,7 +266,7 @@ class CastReady:
 
     def crop(self, frame, point):
         x,y = point
-        if not (48 <= x < 1872 and 48 <= y < 1032):
+        if not (48 <= x < frame.shape[1]-48 and 48 <= y < frame.shape[0]-48):
             return None
         return cv2.cvtColor(frame[y-48:y+48,x-48:x+48],cv2.COLOR_BGR2GRAY)
 
@@ -335,6 +335,7 @@ def run_visual(p, stop, emit, backend):
     fish_count = 0
     item_count = 0
     capture = None
+    cast_point = (p.cast_x,p.cast_y)
     stats_start = time.monotonic()
     stats_frames = 0
     stats_processing = 0.0
@@ -358,7 +359,7 @@ def run_visual(p, stop, emit, backend):
             return False
         if p.dry_run:
             return True
-        backend.moveTo(*point)
+        backend.moveTo(*(capture.mapping.to_screen(point) if capture else point))
         if stop.is_set() or time.monotonic() >= deadline() or not focused_game():
             return False
         try:
@@ -376,7 +377,10 @@ def run_visual(p, stop, emit, backend):
     try:
         if getattr(backend, '__name__', '') == 'pyautogui':
             from screen_capture import FastCapture
-            capture = FastCapture()
+            capture = FastCapture(preset=p.resolution)
+            if p.auto_cast:
+                cast_point=capture.mapping.to_tracker((p.cast_x,p.cast_y))
+            emit('calibration',f'Preset {p.resolution}; desktop {capture.mapping.width}×{capture.mapping.height}; tracker 1920×{capture.mapping.tracker_height}')
         emit('state', 'Focus Pixel Worlds — casting after countdown' if p.auto_cast else 'Visual assist: focus Pixel Worlds and cast manually')
         if stop.wait(p.countdown):
             return
@@ -409,7 +413,7 @@ def run_visual(p, stop, emit, backend):
             if now-stats_start >= 1:
                 emit('metrics', f'{stats_frames/(now-stats_start):.1f} FPS | {1000*stats_processing/stats_frames:.1f} ms capture + detect')
                 stats_start,stats_frames,stats_processing = now,0,0.0
-            ready_to_recast = cast_ready.returned(frame,(p.cast_x,p.cast_y),now) if p.auto_cast else False
+            ready_to_recast = cast_ready.returned(frame,cast_point,now) if p.auto_cast else False
             if not obs.full:
                 full_since = None
             elif not catch_pressed and obs.bar is not None:
@@ -509,10 +513,10 @@ def run_visual(p, stop, emit, backend):
                 if obs.strike or obs.bar is not None:
                     cast_sent = True
                 else:
-                    if not (0 <= p.cast_x < 1920 and 0 <= p.cast_y < 1080):
+                    if not (0 <= cast_point[0] < frame.shape[1] and 0 <= cast_point[1] < frame.shape[0]):
                         raise ValueError('Pick a valid cast point before starting')
-                    cast_ready.learn(frame,(p.cast_x,p.cast_y))
-                    if not click((p.cast_x,p.cast_y)):
+                    cast_ready.learn(frame,cast_point)
+                    if not click(cast_point):
                         continue
                     cast_sent = True
                     cast_time = now

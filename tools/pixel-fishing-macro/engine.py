@@ -32,14 +32,18 @@ class Profile:
     deadband: float = 8
     chase_lost_fish: bool = True
     opacity: float = 100
+    resolution: str = "Auto-detect"
 
     def validate(self):
         for field, low, high in [('hold', .02, 2), ('countdown', 1, 60), ('bite_wait', .1, 120), ('cooldown', .1, 120), ('minutes', .01, 120), ('visual_timeout', 5, 120), ('tracker_hz', 15, 120), ('deadband', 2, 40), ('opacity', 85, 100)]:
             value = float(getattr(self, field))
             if not low <= value <= high:
                 raise ValueError(f'{field} must be between {low} and {high}')
-        if self.visual and self.auto_cast and not (0 <= self.cast_x < 1920 and 0 <= self.cast_y < 1080):
-            raise ValueError('Pick a cast point inside the 1920×1080 game view first')
+        from display_config import PRESETS
+        if self.resolution not in PRESETS:
+            raise ValueError('Select a supported screen preset')
+        if self.visual and self.auto_cast and not (0 <= self.cast_x < 32768 and 0 <= self.cast_y < 32768):
+            raise ValueError('Pick a valid bait position on the game display first')
         if not 1 <= self.cycles <= 10000:
             raise ValueError('Cycles must be 1–10000')
         if not 0 <= self.tolerance <= 255:

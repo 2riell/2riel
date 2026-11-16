@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from engine import Profile, run
 from session import StopSignal
+from display_config import PRESETS
 
 ROOT = Path(__file__).resolve().parent
 
@@ -48,6 +49,10 @@ class App:
         st.configure('TCheckbutton',background=card,foreground=text,padding=(0,5))
         st.map('TCheckbutton',background=[('active',card)],indicatorbackground=[('selected',accent),('!selected','#343e44')],indicatorforeground=[('selected',bg)])
         st.configure('TEntry',fieldbackground='#121719',foreground=text,insertcolor=text,padding=7,bordercolor='#343e44',lightcolor='#343e44',darkcolor='#343e44')
+        st.configure('TCombobox',fieldbackground='#121719',background='#293237',foreground=text,arrowcolor=text,padding=6)
+        st.map('TCombobox',fieldbackground=[('readonly','#121719')],foreground=[('readonly',text)],selectbackground=[('readonly','#25353a')],selectforeground=[('readonly',text)])
+        root.option_add('*TCombobox*Listbox.background','#1b2023')
+        root.option_add('*TCombobox*Listbox.foreground',text)
         st.configure('TButton',background='#293237',foreground=text,borderwidth=0,padding=(14,9))
         st.map('TButton',background=[('active','#3b484f')],foreground=[('disabled',muted)])
         st.configure('Accent.TButton',background=accent,foreground=bg,font=(ui_font,10,'bold'))
@@ -74,7 +79,7 @@ class App:
         self.start_button=ttk.Button(actionrow,text='Start session',style='Accent.TButton',command=self.start)
         self.start_button.pack(side='left')
         ttk.Button(actionrow,text='Stop  ·  F8',style='Stop.TButton',command=self.stop).pack(side='left',padx=8)
-        ttk.Label(actionrow,text='1920 × 1080  /  MAX ZOOM',style='Small.Card.TLabel').pack(side='right')
+        ttk.Label(actionrow,text='FULL SCREEN  /  MAX ZOOM',style='Small.Card.TLabel').pack(side='right')
         self.status=tk.StringVar(value='Ready. Set your cast point, then start a session.')
         ttk.Label(control,textvariable=self.status,style='Card.TLabel',wraplength=700).pack(anchor='w',pady=(12,0))
         self.metrics=tk.StringVar(value='Tracker — FPS   |   0 completed cycles')
@@ -135,13 +140,15 @@ class App:
         left=ttk.Frame(simple);left.grid(row=0,column=0,sticky='nsew',padx=(0,10))
         right=ttk.Frame(simple);right.grid(row=0,column=1,sticky='nsew')
         cast=cardbox(left,'Cast position')
+        ttk.Label(cast,text='Game resolution preset',style='Small.Card.TLabel').pack(anchor='w')
+        ttk.Combobox(cast,textvariable=self.vars['resolution'],values=PRESETS,state='readonly',width=20).pack(fill='x',pady=(5,10))
         fields(cast,[('cast_x','X coordinate'),('cast_y','Y coordinate')])
         ttk.Button(cast,text='Pick bait position',command=self.pick_cast).pack(fill='x')
         ttk.Label(cast,text='Click Pick, then click a bait icon.\nEscape cancels the selection.',style='Small.Card.TLabel').pack(anchor='w',pady=(9,0))
         mode=cardbox(left,'Automation')
+        toggle(mode,'dry_run','Dry run · no game input')
         toggle(mode,'auto_cast','Cast automatically')
         toggle(mode,'repeat','Collect and repeat')
-        toggle(mode,'dry_run','Dry run · no game input')
         limits=cardbox(right,'Session limits')
         toggle(limits,'unlimited_cycles','Unlimited cycles')
         toggle(limits,'no_time_limit','No time limit')
@@ -165,7 +172,7 @@ class App:
         toggle(legacy,'pixel','Pixel bite trigger (visual tracking off)')
         fields(legacy,[('cast','Timed cast action'),('reel','Timed reel action'),('hold','Input hold (s)'),('bite_wait','Timed bite wait (s)'),('x','Bite pixel X'),('y','Bite pixel Y'),('color','Bite color'),('tolerance','Color tolerance')])
         ttk.Button(legacy,text='Sample bite pixel · 3 seconds',command=self.sample).pack(anchor='w')
-        ttk.Label(legacy,text='macOS: allow Accessibility and Screen Recording. Use a 1920 × 1080 primary display.',style='Small.Card.TLabel',wraplength=660).pack(anchor='w',pady=(10,0))
+        ttk.Label(legacy,text='macOS: allow Accessibility and Screen Recording. Select a matching full-screen preset and re-pick your bait position.',style='Small.Card.TLabel',wraplength=660).pack(anchor='w',pady=(10,0))
         loghead=ttk.Frame(logpage);loghead.pack(fill='x',pady=(0,10))
         ttk.Label(loghead,text='Session activity',font=(ui_font,11,'bold')).pack(side='left')
         ttk.Button(loghead,text='Export CSV',command=self.export).pack(side='right')
@@ -310,7 +317,7 @@ class App:
         overlay=tk.Toplevel(self.root)
         self.picker=overlay
         overlay.overrideredirect(True)
-        overlay.geometry('1920x1080+0+0')
+        overlay.geometry(f'{self.root.winfo_screenwidth()}x{self.root.winfo_screenheight()}+0+0')
         overlay.configure(bg='#101c2a',cursor='crosshair')
         overlay.attributes('-topmost',True)
         try:
@@ -336,7 +343,7 @@ class App:
 
     def select_cast(self,event):
         x,y=event.x_root,event.y_root
-        if 0 <= x < 1920 and 0 <= y < 1080:
+        if 0 <= x < self.root.winfo_screenwidth() and 0 <= y < self.root.winfo_screenheight():
             self.vars['cast_x'].set(str(x))
             self.vars['cast_y'].set(str(y))
             self.status.set(f'Cast point saved: ({x}, {y}) — Save profile to keep it')
