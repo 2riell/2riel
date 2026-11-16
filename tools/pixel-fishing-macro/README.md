@@ -6,6 +6,12 @@ Local Python desktop macro for macOS and Windows. Sends configurable keyboard or
 
 With automatic casting and repeat enabled, the app learns the image around your saved bait point before casting. If tracking ends without a catch dialog, it waits for that image to disappear and then return steadily, waits the cooldown, and casts again. Failed rounds are logged and do not increase Fish collected. Time limits, F8 and normal timeout stops remain active. If the bait point moves, the image cannot be learned (for example, the session starts during a minigame), or the icon does not return, it stops instead of guessing.
 
+## Ingredients / Take Item
+
+Collection dialogs can appear after STRIKE without a tracking minigame. The app now accepts the shared cyan result panel and green collection-button surround even when the title and button text differ from Fish Caught/Take Fish. It clicks once, waits for the result to close, and follows the normal cooldown/recast flow. The post-strike wait now allows 12 seconds for either a track or result dialog.
+
+The UI reports **Fish** and **Items** separately. Exact fish-dialog recognition increments Fish; the shared result-shell path increments Items. Counts represent observed collection dialogs, not an inventory audit. The item path was checked with a simulated no-bar result flow and an edited recorded fish dialog with its text removed; an actual ingredient screenshot/live game has not been verified. If the ingredient dialog uses a different layout, it may still require tuning.
+
 ## Long waits for a bite
 
 **Wait for STRIKE without a bite timeout** is enabled by default in Advanced, including when loading profiles created before this option existed. The app keeps watching after a long wait and presses Space when STRIKE appears. The numeric Strike timeout is used only when this option is unchecked; even then, a visible STRIKE takes priority over that timeout. The overall session limit still applies unless No time limit is enabled. Stop/F8 and the post-strike/catch checks remain active.

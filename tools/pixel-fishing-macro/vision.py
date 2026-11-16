@@ -29,6 +29,7 @@ def template(name):
 @dataclass
 class Observation:
     full: bool = False
+    item: bool = False
     caught: bool = False
     take: tuple | None = None
     strike: bool = False
@@ -68,6 +69,8 @@ class Detector:
         self.last_bar = None
         self.caught = template('CAUGHT')
         self.take = template('TAKE')
+        self.take_mask = np.full(self.take.shape,255,dtype=np.uint8)
+        self.take_mask[12:58,35:205] = 0
 
     def inspect(self, frame):
         if frame.shape[:2] != (1080, 1920):
@@ -90,6 +93,26 @@ class Detector:
                 _,confidence,_,location = cv2.minMaxLoc(cv2.matchTemplate(roi,self.take,cv2.TM_CCOEFF_NORMED))
                 if confidence >= .80:
                     return Observation(caught=True,take=(left+location[0]+self.take.shape[1]//2,top+location[1]+self.take.shape[0]//2))
+        # Ingredient results share the dialog shell but use different title/button text.
+        # Match the button surround, then require the cyan panel on both sides.
+        lower=frame[450:1000].astype(np.int16)
+        bb,gg,rr=cv2.split(lower)
+        lime=((gg>130)&(gg>bb*1.4)&(rr>70)).astype('uint8')*255
+        contours,_=cv2.findContours(lime,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+        for contour in contours:
+            bx,by,bw,bh=cv2.boundingRect(contour);by+=450
+            if not (190 <= bw <= 250 and 40 <= bh <= 80):
+                continue
+            left,top=max(0,bx-20),max(0,by-20)
+            roi=gray[top:by+bh+20,left:bx+bw+20]
+            if roi.shape[0]<self.take.shape[0] or roi.shape[1]<self.take.shape[1]:
+                continue
+            result=cv2.matchTemplate(roi,self.take,cv2.TM_CCORR_NORMED,mask=self.take_mask)
+            result=np.nan_to_num(result,nan=-1,posinf=-1,neginf=-1)
+            _,confidence,_,point=cv2.minMaxLoc(result)
+            cx=left+point[0]+self.take.shape[1]//2;cy=top+point[1]+self.take.shape[0]//2
+            if confidence >= .95 and self.item_shell(frame,cx,cy):
+                return Observation(item=True,caught=True,take=(cx,cy))
         # Search the upper half, independent of the character's horizontal position.
         mask = green(frame[:540])
         score = cv2.minMaxLoc(cv2.matchTemplate(mask, self.strike, cv2.TM_CCOEFF_NORMED))[1]
@@ -113,6 +136,18 @@ class Detector:
         elif self.last_bar is None:
             return obs
         return self.track(frame,self.last_bar) or obs
+
+    def item_shell(self,frame,cx,cy):
+        if not (310 <= cx < 1610 and 520 <= cy < 1040):
+            return False
+        def cyan(patch):
+            b,g,r=cv2.split(patch.astype(np.int16))
+            return ((b>120)&(g>120)&(r<g*.8)).mean()
+        left=frame[cy-450:cy-70,cx-300:cx-286]
+        right=frame[cy-450:cy-70,cx+286:cx+300]
+        button=frame[cy-22:cy+22,cx-95:cx+95].astype(np.int16)
+        b,g,r=cv2.split(button)
+        return min(cyan(left),cyan(right))>.5 and ((g>130)&(g>b*1.4)&(r>70)).mean()>.45
 
     def track(self, frame, bar):
         x,y,w,h = bar
@@ -220,6 +255,9 @@ def run_visual(p, stop, emit, backend):
     take_point = None
     close_since = None
     collected_at = None
+    collected_item = False
+    fish_count = 0
+    item_count = 0
     capture = None
     stats_start = time.monotonic()
     stats_frames = 0
@@ -316,7 +354,7 @@ def run_visual(p, stop, emit, backend):
                 close_since = None
                 if state == 'collecting':
                     if now-collected_at > 8:
-                        emit('timeout','Take Fish dialog did not close — stopped without another click')
+                        emit('timeout','Collection dialog did not close — stopped without another click')
                         break
                 else:
                     if take_point is None or abs(obs.take[0]-take_point[0])+abs(obs.take[1]-take_point[1]) > 12:
@@ -325,7 +363,8 @@ def run_visual(p, stop, emit, backend):
                     if take_since is None:
                         take_since = now
                     if now-take_since >= .25 and click(obs.take):
-                        emit('action',('DRY ' if p.dry_run else '')+'Take Fish click')
+                        collected_item = obs.item
+                        emit('action',('DRY ' if p.dry_run else '')+('Take Item click' if obs.item else 'Take Fish click'))
                         emit('state','Waiting for collection dialog to close')
                         state = 'collecting'
                         collected_at = now
@@ -348,10 +387,15 @@ def run_visual(p, stop, emit, backend):
                     completed += 1
                     emit('cycle',str(completed))
                     if not p.dry_run:
-                        emit('fish',str(completed))
+                        if collected_item:
+                            item_count += 1
+                            emit('item',str(item_count))
+                        else:
+                            fish_count += 1
+                            emit('fish',str(fish_count))
                     if (not p.unlimited_cycles and completed >= p.cycles) or not p.repeat:
                         break
-                    emit('state','Fish dialog closed — cooldown before next cast')
+                    emit('state','Item collected — cooldown before next cast')
                     state = 'cooldown'
                     last_seen = now
                 stop.wait(max(0,requested_period-(time.monotonic()-before)))
@@ -462,8 +506,8 @@ def run_visual(p, stop, emit, backend):
                             stop.wait(.06)
                         finally:
                             release()
-                elif state == 'struck' and now-last_seen > 5:
-                    emit('timeout','Fishing track did not appear after strike')
+                elif state == 'struck' and now-last_seen > 12:
+                    emit('timeout','Neither fishing track nor collection dialog appeared after strike')
                     break
             stop.wait(max(0,requested_period-(time.monotonic()-before)))
     except Exception as exc:

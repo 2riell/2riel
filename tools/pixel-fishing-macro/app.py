@@ -61,8 +61,8 @@ class App:
         self.metrics=tk.StringVar(value='Tracker — FPS   |   0 completed cycles')
         ttk.Label(summary,textvariable=self.metrics,style='Card.TLabel',font=(ui_font,9)).pack(anchor='w',pady=(6,0))
         self.last_metrics='Tracker — FPS';self.completed=0
-        self.fish=0;self.started_at=None;self.ended_at=None
-        self.session_stats=tk.StringVar(value='Fish collected: 0    ·    Elapsed: 00:00:00')
+        self.fish=0;self.items=0;self.started_at=None;self.ended_at=None
+        self.session_stats=tk.StringVar(value='Fish: 0 · Items: 0    ·    Elapsed: 00:00:00')
         ttk.Label(summary,textvariable=self.session_stats,style='Card.TLabel',font=(ui_font,12,'bold')).pack(anchor='w',pady=(8,0))
         notebook=ttk.Notebook(shell);notebook.pack(fill='both',expand=True,pady=16)
         notebook.configure(height=330)
@@ -172,7 +172,7 @@ class App:
                 self.listener = keyboard.Listener(on_press=lambda key: self.stop_event.set() if key == keyboard.Key.f8 else None)
                 self.listener.start()
             self.completed=0
-            self.fish=0;self.started_at=time.monotonic();self.ended_at=None
+            self.fish=0;self.items=0;self.started_at=time.monotonic();self.ended_at=None
             self.last_metrics='Tracker — FPS'
             self.metrics.set('Tracker — FPS   |   0 completed cycles')
             self.start_button.configure(state='disabled')
@@ -195,6 +195,8 @@ class App:
                 self.last_metrics=message
                 self.metrics.set(f'{message}   |   {self.completed} cycles')
                 continue
+            if kind == 'item':
+                self.items=int(message)
             if kind == 'fish':
                 self.fish=int(message)
             if kind == 'cycle':
@@ -221,7 +223,7 @@ class App:
                     self.listener = None
         elapsed = int(((self.ended_at if self.ended_at is not None else time.monotonic()) - self.started_at)) if self.started_at is not None else 0
         h,rem=divmod(max(0,elapsed),3600);m,sec=divmod(rem,60)
-        self.session_stats.set(f'Fish collected: {self.fish}    ·    Elapsed: {h:02d}:{m:02d}:{sec:02d}')
+        self.session_stats.set(f'Fish: {self.fish} · Items: {self.items}    ·    Elapsed: {h:02d}:{m:02d}:{sec:02d}')
         self.root.after(100, self.poll)
 
     def pick_cast(self):

@@ -340,3 +340,33 @@ class LateStrikeTests(unittest.TestCase):
                 run_visual(p,clock,lambda *e:events.append(e),b)
             self.assertEqual(b.keys,['space','release space'])
             self.assertFalse(any(e[0]=='timeout' for e in events))
+
+class IngredientTests(unittest.TestCase):
+    def test_collect_without_minigame_and_separate_count(self):
+        class Clock:
+            now=0.
+            def is_set(self):return False
+            def wait(self,n):self.now+=n;return False
+        clock=Clock()
+        class Backend:
+            FAILSAFE=True
+            def __init__(self):self.clicks=0;self.keys=[]
+            def screenshot(self):clock.now+=.1;return np.zeros((1080,1920,3),dtype='uint8')
+            def moveTo(self,*p):pass
+            def mouseDown(self,button):self.clicks+=1
+            def mouseUp(self,button):pass
+            def keyDown(self,k):self.keys.append(k)
+            def keyUp(self,k):pass
+        b=Backend();events=[]
+        def obs(frame):
+            if clock.now<2:return Observation(strike=True)
+            if clock.now<4:return Observation(item=True,caught=True,take=(960,788))
+            return Observation()
+        with patch('vision.time.monotonic',lambda:clock.now),patch('vision.focused_game',return_value=True),patch('vision.Detector') as d:
+            d.return_value.inspect.side_effect=obs
+            run_visual(Profile(visual=True,auto_cast=False,dry_run=False,cycles=1,countdown=1,minutes=.2),clock,lambda *e:events.append(e),b)
+        self.assertEqual(b.keys,['space'])
+        self.assertEqual(b.clicks,1)
+        self.assertIn(('item','1'),events)
+        self.assertFalse(any(e[0]=='fish' for e in events))
+        self.assertEqual(events[-1],('done','1'))
