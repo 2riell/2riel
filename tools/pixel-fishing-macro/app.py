@@ -96,8 +96,8 @@ class App:
             ttk.Checkbutton(parent,text=label,variable=self.vars[key]).pack(anchor='w')
         ttk.Label(simple,text='CAST POINT',style='Muted.TLabel').pack(anchor='w')
         fields(simple,[('cast_x','Screen X'),('cast_y','Screen Y')])
-        ttk.Button(simple,text='Pick bait position · 3 second countdown',command=self.pick_cast).pack(fill='x')
-        ttk.Label(simple,text='Hover over a bait icon during the countdown.',style='Muted.TLabel').pack(anchor='w',pady=(7,14))
+        ttk.Button(simple,text='Pick bait position · click to select',command=self.pick_cast).pack(fill='x')
+        ttk.Label(simple,text='Click Pick, then click either bait icon. Escape cancels.',style='Muted.TLabel').pack(anchor='w',pady=(7,14))
         fields(simple,[('cycles','Cycle limit'),('minutes','Time limit (min)')])
         toggle(simple,'no_time_limit','No time limit — run until stopped')
         toggle(simple,'unlimited_cycles','Unlimited cycles')
@@ -225,24 +225,45 @@ class App:
 
     def pick_cast(self):
         if self.worker and self.worker.is_alive():
-            messagebox.showinfo('Stop first', 'Stop the session before picking a cast point.')
+            messagebox.showinfo('Stop first','Stop the session before selecting a cast point.')
             return
-        self.status.set('Place cursor over either bait icon — saving position in 3 seconds')
-        self.root.after(3000, self.capture_cast)
-
-    def capture_cast(self):
-        if self.worker and self.worker.is_alive():
+        if getattr(self,'picker',None) is not None:
             return
+        self.root.withdraw()
+        overlay=tk.Toplevel(self.root)
+        self.picker=overlay
+        overlay.overrideredirect(True)
+        overlay.geometry('1920x1080+0+0')
+        overlay.configure(bg='#101c2a',cursor='crosshair')
+        overlay.attributes('-topmost',True)
         try:
-            import pyautogui as pg
-            x, y = pg.position()
-            if not (0 <= x < 1920 and 0 <= y < 1080):
-                raise ValueError('Pick a point inside the primary 1920×1080 display')
+            overlay.attributes('-alpha',.25)
+        except tk.TclError:
+            self.cancel_pick()
+            messagebox.showerror('Picker unavailable','Transparency is unavailable. Enter X/Y manually.')
+            return
+        tk.Label(overlay,text='Click a bait icon to save its position · Escape to cancel',bg='#101c2a',fg='white',font=('Arial',18)).pack(pady=24)
+        overlay.bind('<Button-1>',self.select_cast)
+        overlay.bind('<Escape>',lambda e:self.cancel_pick())
+        overlay.bind('<F8>',lambda e:self.cancel_pick())
+        overlay.bind('<Button-3>',lambda e:self.cancel_pick())
+        overlay.update()
+        overlay.focus_force()
+
+    def cancel_pick(self):
+        picker=getattr(self,'picker',None)
+        self.picker=None
+        if picker is not None:
+            picker.destroy()
+        self.root.deiconify()
+
+    def select_cast(self,event):
+        x,y=event.x_root,event.y_root
+        if 0 <= x < 1920 and 0 <= y < 1080:
             self.vars['cast_x'].set(str(x))
             self.vars['cast_y'].set(str(y))
             self.status.set(f'Cast point saved: ({x}, {y}) — Save profile to keep it')
-        except Exception as exc:
-            messagebox.showerror('Could not save cast point', str(exc))
+        self.cancel_pick()
 
     def sample(self):
         if self.worker and self.worker.is_alive():

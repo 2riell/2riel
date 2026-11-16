@@ -141,6 +141,13 @@ class Detector:
         _,confidence,_,location = max(matches,key=lambda m:m[1])
         if confidence >= .70:
             obs.fish_x = x+location[0]+self.fish.shape[1]/2
+        if obs.fish_x is None:
+            gray = cv2.cvtColor(frame[y:y+h,x:x+w],cv2.COLOR_BGR2GRAY)
+            edges = cv2.Canny(gray,40,100)
+            candidates = [cv2.minMaxLoc(cv2.matchTemplate(edges,cv2.Canny(t,40,100),cv2.TM_CCORR_NORMED)) for t in (self.fish,cv2.flip(self.fish,1))]
+            _,score,_,point = max(candidates,key=lambda m:m[1])
+            if score >= .55:
+                obs.fish_x = x+point[0]+self.fish.shape[1]/2
         return obs
 
 
@@ -204,6 +211,8 @@ def run_visual(p, stop, emit, backend):
     strike_cleared = True
     catch_pressed = False
     full_since = None
+    last_fish = None
+    last_fish_time = 0
     strikes = 0
     cast_sent = False
     cast_time = None
@@ -357,6 +366,8 @@ def run_visual(p, stop, emit, backend):
                 strikes = 0
                 catch_pressed = False
                 full_since = None
+                last_fish = None
+                last_fish_time = 0
                 strike_cleared = True
                 detector.last_bar = None
             if obs.caught:
@@ -396,6 +407,8 @@ def run_visual(p, stop, emit, backend):
                     emit('state', 'Tracking fish — A / D')
                 state = 'tracking'
                 last_seen = now
+                last_fish = obs.fish_x
+                last_fish_time = now
                 key = direction(obs,p.deadband)
                 if key != held:
                     release()
@@ -403,9 +416,23 @@ def run_visual(p, stop, emit, backend):
                         held = key
                         backend.keyDown(key)
                     emit('steer', ('DRY ' if p.dry_run else '') + (key or 'release'))
+            elif obs.bar is not None and not catch_pressed:
+                # A visible track with a missing fish is a tracking dropout, not a catch.
+                if state != 'reacquiring':
+                    emit('state','Reacquiring fish — searching the full track')
+                state = 'reacquiring'
+                last_seen = now
+                key = None
+                if last_fish is not None and now-last_fish_time <= .25 and obs.target_x is not None:
+                    key = direction(Observation(fish_x=last_fish,target_x=obs.target_x),p.deadband)
+                if key != held:
+                    release()
+                    if key and not p.dry_run and focused_game() and not stop.is_set():
+                        held = key
+                        backend.keyDown(key)
             else:
                 release()
-                if state == 'tracking':
+                if state in ('tracking','reacquiring'):
                     if now-last_seen > .6:
                         emit('state','Waiting for Fish Caught dialog')
                         state = 'await_catch'

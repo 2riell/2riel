@@ -16,6 +16,10 @@ Enable **Unlimited cycles** in Simple to ignore the numeric cycle limit. Keep **
 
 **Fish collected** increments after the live visual mode clicks Take Fish and observes the catch dialog closing. It is an observed collection count, not an inventory audit. Dry runs and timed/pixel sequences do not increment it. **Elapsed** shows HH:MM:SS since Start, including countdown and focus pauses, freezes when the session ends, and resets with the fish counter on the next Start. Unlimited mode is saved with profiles.
 
+## Reacquiring fast fish
+
+When the fishing track remains visible but the fish is lost, the app stays in Reacquiring and searches the full track instead of transitioning to collection timeout. It briefly steers toward the last known fish position (at most 0.25 seconds, only with a fresh target position), then releases A/D until recognition recovers. Shape matching supplements color matching when fish graphics change. Normal catch detection, focus gating and F8 remain active. This is tested with a simulated dropout exceeding 12 seconds; live behavior still depends on the displayed graphics.
+
 ## Simple and Advanced settings
 
 The redesigned dark window opens on **Simple**: cast position picker, cycle/time limits, Dry run, automatic casting, and repeat. **Advanced** contains tracker tuning, timeouts, timed/pixel controls, and **Window opacity (85–100%)**. Opacity is optional and defaults to fully opaque; it makes the entire window translucent rather than adding a blur effect. Settings persist in saved profiles. New Windows sessions default to visual mode; older profiles preserve their selected mode.
@@ -28,7 +32,7 @@ Offline benchmark on 45 recorded tracking frames: median detection processing **
 
 ## Visual assist (experimental, Windows)
 
-Enable **Visual assist** and **Automatically left-click the saved cast point**. Click **Pick cast point in 3s**, then move the cursor over either bait icon in the game. The app saves the pointer's X/Y position without clicking. Alternatively type Cast click X/Y manually. Use **Save profile** to keep the point for later sessions.
+Enable **Visual assist** and **Automatically left-click the saved cast point**. Click **Pick bait position**, then click either bait icon through the translucent selection overlay. The overlay captures the click and saves X/Y; it does not forward the cast click to the game. Escape, F8 or right-click cancels. Alternatively type Cast click X/Y manually. Use **Save profile** to keep the point for later sessions.
 
 Keep **Dry run** enabled for an initial check. Click Start and focus Pixel Worlds during the countdown. The app logs its planned cast click without moving or clicking the mouse; cast manually to test recognition in this mode. For automatic casting, uncheck Dry run. The app left-clicks the saved point once, waits for STRIKE, presses **Space**, and uses **A/D** to keep the target aligned with the fish. F8 stops the session. The cast key field applies only to timed mode.
 

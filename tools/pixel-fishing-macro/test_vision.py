@@ -290,3 +290,27 @@ class FullMeterTests(unittest.TestCase):
                 run_visual(Profile(visual=True,auto_cast=False,dry_run=dry,minutes=.06,countdown=1),clock,lambda *e:events.append(e),b)
             self.assertEqual(b.keys,[] if dry else [('down','space'),('up','space')])
             self.assertEqual(sum('full meter' in e[1] for e in events),1)
+
+class ReacquireTests(unittest.TestCase):
+    def test_long_dropout_keeps_searching_and_resumes(self):
+        class Clock:
+            now=0.
+            def is_set(self):return False
+            def wait(self,n):self.now+=n;return False
+        clock=Clock()
+        class Backend:
+            FAILSAFE=True
+            def __init__(self):self.keys=[]
+            def screenshot(self):clock.now+=.1;return np.zeros((1080,1920,3),dtype='uint8')
+            def keyDown(self,k):self.keys.append(k)
+            def keyUp(self,k):pass
+        def observe(frame):
+            fish=1100 if clock.now<2 else None if clock.now<16 else 600
+            return Observation(bar=(549,100,822,70),fish_x=fish,target_x=800,target_width=120)
+        b=Backend();events=[]
+        with patch('vision.time.monotonic',lambda:clock.now),patch('vision.focused_game',return_value=True),patch('vision.Detector') as d:
+            d.return_value.inspect.side_effect=observe
+            run_visual(Profile(visual=True,auto_cast=False,dry_run=False,minutes=.32,countdown=1),clock,lambda *e:events.append(e),b)
+        self.assertIn('d',b.keys);self.assertIn('a',b.keys)
+        self.assertTrue(any('Reacquiring' in e[1] for e in events))
+        self.assertFalse(any(e[0]=='timeout' for e in events))
