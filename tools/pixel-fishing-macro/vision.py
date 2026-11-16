@@ -265,9 +265,12 @@ class CastReady:
 
 
 def focused_game():
-    """Windows foreground gate. Called again immediately before each input."""
+    """Foreground gate, checked again immediately before each input."""
+    if sys.platform == 'darwin':
+        from mac_support import focused_game as mac_focused
+        return mac_focused()
     if sys.platform != 'win32':
-        raise RuntimeError('Visual assist currently supports Windows. Timed/pixel mode remains available on macOS.')
+        raise RuntimeError('Visual assist supports Windows and macOS.')
     user32 = ctypes.windll.user32
     user32.GetForegroundWindow.restype = ctypes.c_void_p
     user32.GetWindowTextW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_int]

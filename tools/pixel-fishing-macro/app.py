@@ -25,7 +25,7 @@ class App:
         self.rows = []
         defaults = Profile()
         defaults.no_time_limit = True
-        defaults.visual = sys.platform == 'win32'
+        defaults.visual = sys.platform in ('win32','darwin')
         self.vars = {k:(tk.BooleanVar(value=v) if isinstance(v,bool) else tk.StringVar(value=str(v))) for k,v in defaults.dict().items()}
         ui_font = 'Segoe UI' if sys.platform == 'win32' else 'Helvetica'
         bg,card,text,muted,accent = '#111416','#1b2023','#edf1f2','#929da3','#58d9df'
@@ -155,11 +155,11 @@ class App:
         ttk.Label(appearance,text='Window opacity  ·  85–100%',style='Small.Card.TLabel').pack(anchor='w')
         ttk.Scale(appearance,from_=85,to=100,variable=self.vars['opacity'],command=self.apply_opacity).pack(fill='x',pady=8)
         legacy=cardbox(advanced,'Input mode')
-        toggle(legacy,'visual','Visual tracking (Windows)')
+        toggle(legacy,'visual','Visual tracking (Windows / Mac)')
         toggle(legacy,'pixel','Pixel bite trigger (visual tracking off)')
         fields(legacy,[('cast','Timed cast action'),('reel','Timed reel action'),('hold','Input hold (s)'),('bite_wait','Timed bite wait (s)'),('x','Bite pixel X'),('y','Bite pixel Y'),('color','Bite color'),('tolerance','Color tolerance')])
         ttk.Button(legacy,text='Sample bite pixel · 3 seconds',command=self.sample).pack(anchor='w')
-        ttk.Label(legacy,text='macOS uses timed / pixel mode. Allow Accessibility and Screen Recording.',style='Small.Card.TLabel',wraplength=660).pack(anchor='w',pady=(10,0))
+        ttk.Label(legacy,text='macOS: allow Accessibility and Screen Recording. Use a 1920 × 1080 primary display.',style='Small.Card.TLabel',wraplength=660).pack(anchor='w',pady=(10,0))
         loghead=ttk.Frame(logpage);loghead.pack(fill='x',pady=(0,10))
         ttk.Label(loghead,text='Session activity',font=(ui_font,11,'bold')).pack(side='left')
         ttk.Button(loghead,text='Export CSV',command=self.export).pack(side='right')
@@ -200,8 +200,11 @@ class App:
             self.stop_event.clear()
             if p.visual:
                 import sys
-                if sys.platform != 'win32':
-                    raise ValueError('Visual assist currently supports Windows only')
+                if sys.platform not in ('win32','darwin'):
+                    raise ValueError('Visual assist supports Windows and macOS')
+                if sys.platform == 'darwin':
+                    from mac_support import check_permissions
+                    check_permissions()
             if not p.dry_run or p.visual:
                 import pyautogui as backend
                 from pynput import keyboard
@@ -381,14 +384,19 @@ if __name__ == '__main__':
     root = tk.Tk()
     app = App(root)
     import sys
-    if '--smoke-test' in sys.argv:
+    if '--smoke-test' in sys.argv or '--gui-smoke-test' in sys.argv:
         import pyautogui
         from vision import Detector
         from screen_capture import FastCapture
         Detector()
-        capture=FastCapture(check_resolution=False)
-        capture.grab()
-        capture.close()
+        if '--gui-smoke-test' not in sys.argv:
+            capture=FastCapture(check_resolution=False)
+            capture.grab()
+            capture.close()
+        if sys.platform == 'darwin':
+            import AppKit, Quartz, ApplicationServices
+            from mac_support import focused_game
+            focused_game()
         from pynput import keyboard, mouse
         root.update()
         app.vars['cast_x'].set('1185')
