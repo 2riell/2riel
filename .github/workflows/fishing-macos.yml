@@ -1,0 +1,38 @@
+name: Fishing Lab macOS App
+on:
+  pull_request:
+    paths: ['tools/pixel-fishing-macro/**', '.github/workflows/fishing-macos.yml']
+  push:
+    branches: [main, add-pixel-fishing-lab]
+    paths: ['tools/pixel-fishing-macro/**', '.github/workflows/fishing-macos.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  macos-app:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+            label: Apple-Silicon
+          - runner: macos-15-intel
+            arch: x64
+            label: Intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: ${{ matrix.arch }}
+      - name: Build and test Mac app
+        run: bash tools/pixel-fishing-macro/build_macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FishingLab-macOS-${{ matrix.label }}
+          path: tools/pixel-fishing-macro/mac-download/*
+          if-no-files-found: error
+          retention-days: 90

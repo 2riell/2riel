@@ -1,0 +1,40 @@
+name: Fishing Lab Windows EXE
+
+on:
+  pull_request:
+    paths:
+      - 'tools/pixel-fishing-macro/**'
+      - '.github/workflows/fishing-windows.yml'
+  push:
+    branches: [main, add-pixel-fishing-lab]
+    paths:
+      - 'tools/pixel-fishing-macro/**'
+      - '.github/workflows/fishing-windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-exe:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Build and test standalone app
+        shell: pwsh
+        run: ./tools/pixel-fishing-macro/build_windows.ps1
+      - name: Upload Windows download
+        uses: actions/upload-artifact@v4
+        with:
+          name: FishingLab-Windows-x64
+          path: |
+            tools/pixel-fishing-macro/dist/FishingLab.exe
+            tools/pixel-fishing-macro/dist/README.md
+            tools/pixel-fishing-macro/dist/SHA256.txt
+          if-no-files-found: error
+          retention-days: 90
