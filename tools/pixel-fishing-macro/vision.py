@@ -181,7 +181,7 @@ def run_visual(p, stop, emit, backend):
     """Coordinate cast, strike, steering, collection, and bounded repeat cycles."""
     detector = Detector()
     cast_ready = CastReady()
-    deadline = time.monotonic() + p.minutes*60
+    deadline = float("inf") if p.no_time_limit else time.monotonic() + p.minutes*60
     held = None
     state = 'waiting'
     completed = 0

@@ -66,3 +66,12 @@ class EngineTests(unittest.TestCase):
         self.assertFalse(matches((240,255,250),'#ffffff',10))
 
 if __name__ == '__main__': unittest.main()
+
+class NoTimeLimitTests(EngineTests):
+    def test_no_time_limit_runs_past_configured_minutes(self):
+        events=self.execute(Profile(cycles=2,minutes=.01,no_time_limit=True))
+        self.assertEqual(events[-1],('done','2'))
+    def test_unlimited_untimed_still_stops(self):
+        c=Clock();c.cancelled=True
+        events=self.execute(Profile(unlimited_cycles=True,no_time_limit=True),c)
+        self.assertFalse(any(e[0]=='action' for e in events))

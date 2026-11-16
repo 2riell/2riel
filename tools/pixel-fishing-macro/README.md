@@ -6,9 +6,13 @@ Local Python desktop macro for macOS and Windows. Sends configurable keyboard or
 
 With automatic casting and repeat enabled, the app learns the image around your saved bait point before casting. If tracking ends without a catch dialog, it waits for that image to disappear and then return steadily, waits the cooldown, and casts again. Failed rounds are logged and do not increase Fish collected. Time limits, F8 and normal timeout stops remain active. If the bait point moves, the image cannot be learned (for example, the session starts during a minigame), or the icon does not return, it stops instead of guessing.
 
+## Running without limits
+
+**No time limit** is enabled by default for new app sessions. Enable **Unlimited cycles** and **Take fish and repeat** as well to keep fishing until Stop/F8 or a detection/collection error. The numeric time and cycle fields are ignored while their respective unlimited options are enabled. Older saved profiles keep their previous time limit until No time limit is enabled and saved. The elapsed timer still runs; bite and collection timeouts remain recovery/error checks.
+
 ## Session counters and unlimited cycles
 
-Enable **Unlimited cycles** in Simple to ignore the numeric cycle limit. Keep **Take fish and repeat** enabled for continuous visual fishing. The session time limit, timeout stops, Stop button and F8 still apply.
+Enable **Unlimited cycles** in Simple to ignore the numeric cycle limit. Keep **Take fish and repeat** enabled for continuous visual fishing. The session time limit applies only when No time limit is off. Timeout stops, Stop and F8 still apply.
 
 **Fish collected** increments after the live visual mode clicks Take Fish and observes the catch dialog closing. It is an observed collection count, not an inventory audit. Dry runs and timed/pixel sequences do not increment it. **Elapsed** shows HH:MM:SS since Start, including countdown and focus pauses, freezes when the session ends, and resets with the fish counter on the next Start. Unlimited mode is saved with profiles.
 

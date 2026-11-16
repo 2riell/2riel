@@ -24,6 +24,7 @@ class App:
         self.listener = None
         self.rows = []
         defaults = Profile()
+        defaults.no_time_limit = True
         defaults.visual = sys.platform == 'win32'
         self.vars = {k:(tk.BooleanVar(value=v) if isinstance(v,bool) else tk.StringVar(value=str(v))) for k,v in defaults.dict().items()}
         ui_font = 'Segoe UI' if sys.platform == 'win32' else 'Helvetica'
@@ -98,7 +99,8 @@ class App:
         ttk.Button(simple,text='Pick bait position · 3 second countdown',command=self.pick_cast).pack(fill='x')
         ttk.Label(simple,text='Hover over a bait icon during the countdown.',style='Muted.TLabel').pack(anchor='w',pady=(7,14))
         fields(simple,[('cycles','Cycle limit'),('minutes','Time limit (min)')])
-        toggle(simple,'unlimited_cycles','Unlimited cycles (time limit still applies)')
+        toggle(simple,'no_time_limit','No time limit — run until stopped')
+        toggle(simple,'unlimited_cycles','Unlimited cycles')
         toggle(simple,'dry_run','Dry run — observe without sending input')
         toggle(simple,'auto_cast','Automatically cast at my saved point')
         toggle(simple,'repeat','Take fish and repeat')

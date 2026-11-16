@@ -14,6 +14,7 @@ class Profile:
     cycles: int = 30
     unlimited_cycles: bool = False
     minutes: float = 10
+    no_time_limit: bool = False
     dry_run: bool = True
     visual: bool = False
     auto_cast: bool = True
@@ -65,7 +66,7 @@ def run(profile, stop, emit, backend=None):
         from vision import run_visual
         return run_visual(p, stop, emit, backend)
     started = time.monotonic()
-    deadline = started + p.minutes * 60
+    deadline = float("inf") if p.no_time_limit else started + p.minutes * 60
 
     def wait(seconds):
         remaining = max(0, deadline - time.monotonic())
