@@ -469,3 +469,30 @@ class PersistentChaseTests(unittest.TestCase):
 
     def test_new_option_defaults_on_for_old_profiles(self):
         self.assertTrue(Profile(**{'tracker_hz':60}).chase_lost_fish)
+
+
+class SteeringContinuityTests(unittest.TestCase):
+    def test_visible_fish_missing_target_preserves_hold(self):
+        from vision import MotionSteering
+        m=MotionSteering();bar=(549,100,822,70)
+        self.assertEqual(m.key(Observation(bar=bar,fish_x=1200,target_x=900),1,8,True),'d')
+        for t in (1.1,1.5,2,5):
+            self.assertEqual(m.key(Observation(bar=bar,fish_x=1200),t,8,True),'d')
+        self.assertEqual(m.key(Observation(bar=bar,fish_x=800,target_x=1000),5.01,8,True),'a')
+        self.assertIsNone(m.key(Observation(),5.02,8,True))
+
+    def test_small_track_box_jitter_keeps_chase(self):
+        from vision import MotionSteering
+        m=MotionSteering();bar=(549,100,822,70)
+        m.key(Observation(bar=bar,fish_x=1200,target_x=900),1,8,True)
+        self.assertEqual(m.key(Observation(bar=(551,101,820,69)),2,8,True),'d')
+        self.assertIsNone(m.key(Observation(bar=(200,200,822,70)),3,8,True))
+
+    def test_tolerance_boundary_does_not_pulse_key(self):
+        from vision import MotionSteering
+        for sign,key in ((1,'d'),(-1,'a')):
+            m=MotionSteering();bar=(549,100,822,70)
+            for i,error in enumerate((10,7,9,6,8)):
+                self.assertEqual(m.key(Observation(bar=bar,fish_x=1000+sign*error,target_x=1000),i*.02,8,True),key)
+            self.assertIsNone(m.key(Observation(bar=bar,fish_x=1000,target_x=1000),.12,8,True))
+            self.assertEqual(m.key(Observation(bar=bar,fish_x=1000-sign*20,target_x=1000),.14,8,True),'a' if key=='d' else 'd')

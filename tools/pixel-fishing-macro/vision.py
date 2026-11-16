@@ -199,19 +199,21 @@ class MotionSteering:
         self.samples={}
         self.bar=None
         self.chase_direction=None
+        self.last_command=None
 
     def reset(self):
         self.samples.clear()
         self.bar=None
         self.chase_direction=None
+        self.last_command=None
 
     def key(self,obs,now,deadband,chase_lost=False):
         if obs.bar is None:
             self.reset()
             return None
-        if self.bar != obs.bar:
+        if self.bar is not None and any(abs(a-b)>limit for a,b,limit in zip(self.bar,obs.bar,(8,8,16,8))):
             self.reset()
-            self.bar=obs.bar
+        self.bar=obs.bar
         for name,value in (('fish',obs.fish_x),('target',obs.target_x)):
             if value is None:
                 continue
@@ -226,19 +228,33 @@ class MotionSteering:
             # Near the center, its measured velocity supplies the escape direction.
             side=direction(Observation(fish_x=obs.fish_x,target_x=target[0]),deadband) if target is not None and now-target[1]<=.2 else None
             velocity=self.samples['fish'][2]
-            self.chase_direction=side or ('d' if velocity>0 else 'a' if velocity<0 else None)
+            if target is not None and now-target[1]<=.2:
+                self.chase_direction=side or ('d' if velocity>0 else 'a' if velocity<0 else None)
         elif chase_lost and self.chase_direction is not None:
             # Hold continuously until a fresh fish observation or the track ends.
-            return self.chase_direction
+            self.last_command=self.chase_direction
+            return self.last_command
         positions={}
         for name in ('fish','target'):
             sample=self.samples.get(name)
             if sample is None or now-sample[1]>.2:
+                if chase_lost and name=='target':
+                    return self.last_command
+                self.last_command=None
                 return None
             value,seen,velocity=sample
             # Extrapolate only while the track remains visible, at most 200 ms.
             positions[name]=float(np.clip(value+velocity*(now-seen),obs.bar[0],obs.bar[0]+obs.bar[2]))
-        return direction(Observation(fish_x=positions['fish'],target_x=positions['target']),deadband)
+        error=positions['fish']-positions['target']
+        # Hysteresis avoids repeatedly releasing/repressing at the tolerance edge.
+        # Clear alignment still releases; a measured opposite-side error reverses now.
+        key=direction(Observation(fish_x=positions['fish'],target_x=positions['target']),deadband)
+        if key is None and self.last_command=='d' and error>deadband*.5:
+            key='d'
+        elif key is None and self.last_command=='a' and error < -deadband*.5:
+            key='a'
+        self.last_command=key
+        return key
 
 
 class CastReady:
