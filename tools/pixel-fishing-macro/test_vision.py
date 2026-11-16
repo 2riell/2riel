@@ -342,11 +342,11 @@ class LateStrikeTests(unittest.TestCase):
             self.assertFalse(any(e[0]=='timeout' for e in events))
 
 class IngredientTests(unittest.TestCase):
-    def test_collect_without_minigame_and_separate_count(self):
+    def simulate_ingredient(self, arrival=2, cancel=False, track_first=False):
         class Clock:
             now=0.
-            def is_set(self):return False
-            def wait(self,n):self.now+=n;return False
+            def is_set(self):return cancel and self.now>20
+            def wait(self,n):self.now+=n;return self.is_set()
         clock=Clock()
         class Backend:
             FAILSAFE=True
@@ -360,13 +360,51 @@ class IngredientTests(unittest.TestCase):
         b=Backend();events=[]
         def obs(frame):
             if clock.now<2:return Observation(strike=True)
-            if clock.now<4:return Observation(item=True,caught=True,take=(960,788))
+            if track_first and clock.now<3:
+                return Observation(bar=(549,100,822,70),fish_x=960,target_x=960)
+            if arrival<=clock.now<arrival+2:return Observation(item=True,caught=True,take=(960,788))
             return Observation()
         with patch('vision.time.monotonic',lambda:clock.now),patch('vision.focused_game',return_value=True),patch('vision.Detector') as d:
             d.return_value.inspect.side_effect=obs
-            run_visual(Profile(visual=True,auto_cast=False,dry_run=False,cycles=1,countdown=1,minutes=.2),clock,lambda *e:events.append(e),b)
+            run_visual(Profile(visual=True,auto_cast=False,dry_run=False,cycles=1,countdown=1,no_time_limit=True),clock,lambda *e:events.append(e),b)
+        return b,events
+
+    def test_collect_without_minigame_and_separate_count(self):
+        b,events=self.simulate_ingredient()
         self.assertEqual(b.keys,['space'])
         self.assertEqual(b.clicks,1)
         self.assertIn(('item','1'),events)
         self.assertFalse(any(e[0]=='fish' for e in events))
         self.assertEqual(events[-1],('done','1'))
+
+    def test_delayed_ingredient_survives_old_timeout(self):
+        b,events=self.simulate_ingredient(arrival=30)
+        self.assertEqual(b.keys,['space'])
+        self.assertEqual(b.clicks,1)
+        self.assertIn(('item','1'),events)
+        self.assertEqual(events[-1],('done','1'))
+        self.assertFalse(any(e[0]=='timeout' for e in events))
+
+    def test_unrecognized_result_keeps_waiting_and_can_stop(self):
+        b,events=self.simulate_ingredient(arrival=100,cancel=True)
+        self.assertEqual(b.clicks,0)
+        self.assertEqual(events[-1],('done','0'))
+        self.assertFalse(any(e[0]=='timeout' for e in events))
+
+    def test_short_and_narrow_ingredient_shell(self):
+        for half_width in (200,250,300,350):
+            im=np.zeros((1080,1920,3),dtype=np.uint8)
+            cx,cy=960,650
+            im[cy-160:cy-40,cx-half_width:cx-half_width+8]=(200,180,30)
+            im[cy-160:cy-40,cx+half_width-8:cx+half_width]=(200,180,30)
+            im[cy-22:cy+22,cx-95:cx+95]=(30,220,150)
+            self.assertTrue(Detector().item_shell(im,cx,cy))
+            im[:,:cx]=0
+            self.assertFalse(Detector().item_shell(im,cx,cy))
+
+    def test_result_after_track_disappears_survives_old_timeout(self):
+        b,events=self.simulate_ingredient(arrival=30,track_first=True)
+        self.assertEqual(b.clicks,1)
+        self.assertIn(('item','1'),events)
+        self.assertEqual(events[-1],('done','1'))
+        self.assertFalse(any(e[0]=='timeout' for e in events))

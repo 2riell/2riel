@@ -70,7 +70,7 @@ class Detector:
         self.caught = template('CAUGHT')
         self.take = template('TAKE')
         self.take_mask = np.full(self.take.shape,255,dtype=np.uint8)
-        self.take_mask[12:58,35:205] = 0
+        self.take_mask[10:60,15:221] = 0
 
     def inspect(self, frame):
         if frame.shape[:2] != (1080, 1920):
@@ -95,12 +95,12 @@ class Detector:
                     return Observation(caught=True,take=(left+location[0]+self.take.shape[1]//2,top+location[1]+self.take.shape[0]//2))
         # Ingredient results share the dialog shell but use different title/button text.
         # Match the button surround, then require the cyan panel on both sides.
-        lower=frame[450:1000].astype(np.int16)
+        lower=frame[250:1040].astype(np.int16)
         bb,gg,rr=cv2.split(lower)
         lime=((gg>130)&(gg>bb*1.4)&(rr>70)).astype('uint8')*255
         contours,_=cv2.findContours(lime,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
         for contour in contours:
-            bx,by,bw,bh=cv2.boundingRect(contour);by+=450
+            bx,by,bw,bh=cv2.boundingRect(contour);by+=250
             if not (190 <= bw <= 250 and 40 <= bh <= 80):
                 continue
             left,top=max(0,bx-20),max(0,by-20)
@@ -138,16 +138,20 @@ class Detector:
         return self.track(frame,self.last_bar) or obs
 
     def item_shell(self,frame,cx,cy):
-        if not (310 <= cx < 1610 and 520 <= cy < 1040):
+        # Ingredients can use a shorter/narrower panel. Validate paired cyan
+        # borders immediately above the button, rather than a fish-sized panel.
+        if not (410 <= cx < 1510 and 200 <= cy < 1040):
             return False
-        def cyan(patch):
-            b,g,r=cv2.split(patch.astype(np.int16))
-            return ((b>120)&(g>120)&(r<g*.8)).mean()
-        left=frame[cy-450:cy-70,cx-300:cx-286]
-        right=frame[cy-450:cy-70,cx+286:cx+300]
+        patch=frame[cy-150:cy-50,cx-400:cx+401].astype(np.int16)
+        b,g,r=cv2.split(patch)
+        cyan=(b>120)&(g>120)&(r<g*.8)
+        columns=cyan.mean(axis=0)>.65
+        left=np.flatnonzero(columns[:221])-400
+        right=np.flatnonzero(columns[580:])+180
+        paired=any(np.count_nonzero(np.abs(right+x)<=12)>=4 for x in left)
         button=frame[cy-22:cy+22,cx-95:cx+95].astype(np.int16)
         b,g,r=cv2.split(button)
-        return min(cyan(left),cyan(right))>.5 and ((g>130)&(g>b*1.4)&(r>70)).mean()>.45
+        return paired and ((g>130)&(g>b*1.4)&(r>70)).mean()>.45
 
     def track(self, frame, bar):
         x,y,w,h = bar
@@ -256,6 +260,7 @@ def run_visual(p, stop, emit, backend):
     close_since = None
     collected_at = None
     collected_item = False
+    result_notice = False
     fish_count = 0
     item_count = 0
     capture = None
@@ -409,6 +414,7 @@ def run_visual(p, stop, emit, backend):
                 cast_time = None
                 strikes = 0
                 catch_pressed = False
+                result_notice = False
                 full_since = None
                 last_fish = None
                 last_fish_time = 0
@@ -487,9 +493,9 @@ def run_visual(p, stop, emit, backend):
                         emit('failed','No catch dialog; bait icon returned — retrying after cooldown')
                         state = 'cooldown'
                         last_seen = now
-                    elif now-last_seen > 12:
-                        emit('timeout','No catch dialog — stopped without collecting or recasting')
-                        break
+                    elif now-last_seen > 12 and not result_notice:
+                        emit('state','Still waiting for Take Fish / Take Item — Stop or F8 to cancel')
+                        result_notice = True
                 elif obs.strike and strike_cleared:
                     if strikes:
                         emit('state','Strike repeated without a track — stopped for inspection')
@@ -506,9 +512,14 @@ def run_visual(p, stop, emit, backend):
                             stop.wait(.06)
                         finally:
                             release()
-                elif state == 'struck' and now-last_seen > 12:
-                    emit('timeout','Neither fishing track nor collection dialog appeared after strike')
-                    break
+                elif state == 'struck':
+                    if ready_to_recast and now-last_seen >= 2 and p.repeat:
+                        emit('failed','Bait icon returned after strike — retrying after cooldown')
+                        state = 'cooldown'
+                        last_seen = now
+                    elif now-last_seen > 12 and not result_notice:
+                        emit('state','Still waiting for fishing bar or Take Item — Stop or F8 to cancel')
+                        result_notice = True
             stop.wait(max(0,requested_period-(time.monotonic()-before)))
     except Exception as exc:
         emit('error',f'{type(exc).__name__}: {exc}')
