@@ -408,3 +408,35 @@ class IngredientTests(unittest.TestCase):
         self.assertIn(('item','1'),events)
         self.assertEqual(events[-1],('done','1'))
         self.assertFalse(any(e[0]=='timeout' for e in events))
+
+
+class MotionGapTests(unittest.TestCase):
+    def test_target_dropout_does_not_hide_visible_fish(self):
+        im=scene(fish=1200,target=800)
+        im[90:115,730:870]=0
+        obs=Detector().track(im,(549,100,822,70))
+        self.assertIsNone(obs.target_x)
+        self.assertAlmostEqual(obs.fish_x,1200,delta=3)
+
+    def test_fish_at_both_track_edges(self):
+        for fish in (550,1370):
+            obs=Detector().track(scene(fish=fish,target=950),(549,100,822,70))
+            self.assertAlmostEqual(obs.fish_x,fish,delta=3)
+
+    def test_short_gap_predicts_motion_then_expires(self):
+        from vision import MotionSteering
+        m=MotionSteering();bar=(549,100,822,70)
+        m.key(Observation(bar=bar,fish_x=900,target_x=1000),1,8)
+        m.key(Observation(bar=bar,fish_x=950,target_x=1000),1.05,8)
+        self.assertEqual(m.key(Observation(bar=bar,target_x=1000),1.15,8),'d')
+        self.assertIsNone(m.key(Observation(bar=bar,target_x=1000),1.26,8))
+        # A new detection overrides the old prediction immediately.
+        self.assertEqual(m.key(Observation(bar=bar,fish_x=800,target_x=1000),1.27,8),'a')
+
+    def test_target_gap_and_track_disappearance(self):
+        from vision import MotionSteering
+        m=MotionSteering();bar=(549,100,822,70)
+        self.assertEqual(m.key(Observation(bar=bar,fish_x=1200,target_x=900),1,8),'d')
+        self.assertEqual(m.key(Observation(bar=bar,fish_x=1250),1.1,8),'d')
+        self.assertIsNone(m.key(Observation(),1.11,8))
+        self.assertIsNone(m.key(Observation(bar=bar,fish_x=1250),1.12,8))

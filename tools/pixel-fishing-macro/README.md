@@ -28,7 +28,7 @@ Enable **Unlimited cycles** in Simple to ignore the numeric cycle limit. Keep **
 
 ## Reacquiring fast fish
 
-When the fishing track remains visible but the fish is lost, the app stays in Reacquiring and searches the full track instead of transitioning to collection timeout. It briefly steers toward the last known fish position (at most 0.25 seconds, only with a fresh target position), then releases A/D until recognition recovers. Shape matching supplements color matching when fish graphics change. Normal catch detection, focus gating and F8 remain active. This is tested with a simulated dropout exceeding 12 seconds; live behavior still depends on the displayed graphics.
+The fish search covers the entire track plus 40 pixels on each horizontal edge and 12 pixels above/below. Target-border recognition uses horizontal lines to reduce interference from nearby fish pixels, and a missing target no longer skips the fish search. Fish and target positions are sampled independently. While the track remains visible, short detection gaps use bounded velocity prediction for up to 200 ms; a fresh detection takes priority immediately. Longer gaps release A/D until reacquired. Missing track, lost game focus, and stale captures clear prediction. This improves continuity without changing the game's movement speed. Tests cover both track edges, target dropout, short-gap prediction, expiry, and disappearance; live fast-fish behavior still needs verification.
 
 ## Simple and Advanced settings
 

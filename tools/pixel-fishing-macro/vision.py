@@ -164,30 +164,69 @@ class Detector:
         top = max(0,y-6)
         mask = tracking_mask(frame[top:y+h,left:right])
         band = mask[:y+15-top]
-        columns = np.flatnonzero((band > 0).sum(axis=0) >= 5)
-        if len(columns) < 50:
-            return obs
-        groups = np.split(columns,np.where(np.diff(columns)>3)[0]+1)
-        groups = [a for a in groups if 65 <= a[-1]-a[0] <= 160]
-        if len(groups) != 1:
-            return obs
-        target = groups[0]
-        obs.target_x = left+(target[0]+target[-1])/2
-        obs.target_width = float(target[-1]-target[0])
-        # Search the FULL track; distance from the target does not limit detection.
-        roi = mask[y-top:y-top+h,x-left:x-left+w]
+        # A horizontal border separates the target from nearby fish pixels.
+        # Do not abandon fish detection when this independent target search fails.
+        horizontal=cv2.morphologyEx(band,cv2.MORPH_OPEN,np.ones((1,45),np.uint8))
+        columns=np.flatnonzero((horizontal>0).sum(axis=0)>=3)
+        groups=np.split(columns,np.where(np.diff(columns)>3)[0]+1) if len(columns) else []
+        groups=[a for a in groups if 65<=a[-1]-a[0]<=160]
+        if len(groups)==1:
+            target=groups[0]
+            obs.target_x=left+(target[0]+target[-1])/2
+            obs.target_width=float(target[-1]-target[0])
+        # Search the full track plus edge padding, independent of the target.
+        fish_left,fish_right=max(0,x-40),min(1920,x+w+40)
+        fish_top,fish_bottom=max(0,y-12),min(1080,y+h+12)
+        fish_frame=frame[fish_top:fish_bottom,fish_left:fish_right]
+        roi=tracking_mask(fish_frame)
         matches = [cv2.minMaxLoc(cv2.matchTemplate(roi,t,cv2.TM_CCOEFF_NORMED)) for t in (self.fish,cv2.flip(self.fish,1))]
         _,confidence,_,location = max(matches,key=lambda m:m[1])
         if confidence >= .70:
-            obs.fish_x = x+location[0]+self.fish.shape[1]/2
+            obs.fish_x = fish_left+location[0]+self.fish.shape[1]/2
         if obs.fish_x is None:
-            gray = cv2.cvtColor(frame[y:y+h,x:x+w],cv2.COLOR_BGR2GRAY)
+            gray = cv2.cvtColor(fish_frame,cv2.COLOR_BGR2GRAY)
             edges = cv2.Canny(gray,40,100)
             candidates = [cv2.minMaxLoc(cv2.matchTemplate(edges,cv2.Canny(t,40,100),cv2.TM_CCORR_NORMED)) for t in (self.fish,cv2.flip(self.fish,1))]
             _,score,_,point = max(candidates,key=lambda m:m[1])
             if score >= .55:
-                obs.fish_x = x+point[0]+self.fish.shape[1]/2
+                obs.fish_x = fish_left+point[0]+self.fish.shape[1]/2
         return obs
+
+
+class MotionSteering:
+    """Bridge brief recognition gaps using independently sampled positions."""
+    def __init__(self):
+        self.samples={}
+        self.bar=None
+
+    def reset(self):
+        self.samples.clear()
+        self.bar=None
+
+    def key(self,obs,now,deadband):
+        if obs.bar is None:
+            self.reset()
+            return None
+        if self.bar != obs.bar:
+            self.reset()
+            self.bar=obs.bar
+        for name,value in (('fish',obs.fish_x),('target',obs.target_x)):
+            if value is None:
+                continue
+            old=self.samples.get(name)
+            velocity=0.
+            if old is not None and 0<now-old[1]<=.2:
+                velocity=float(np.clip((value-old[0])/(now-old[1]),-1800,1800))
+            self.samples[name]=(value,now,velocity)
+        positions={}
+        for name in ('fish','target'):
+            sample=self.samples.get(name)
+            if sample is None or now-sample[1]>.2:
+                return None
+            value,seen,velocity=sample
+            # Extrapolate only while the track remains visible, at most 200 ms.
+            positions[name]=float(np.clip(value+velocity*(now-seen),obs.bar[0],obs.bar[0]+obs.bar[2]))
+        return direction(Observation(fish_x=positions['fish'],target_x=positions['target']),deadband)
 
 
 class CastReady:
@@ -250,8 +289,7 @@ def run_visual(p, stop, emit, backend):
     strike_cleared = True
     catch_pressed = False
     full_since = None
-    last_fish = None
-    last_fish_time = 0
+    motion = MotionSteering()
     strikes = 0
     cast_sent = False
     cast_time = None
@@ -311,6 +349,7 @@ def run_visual(p, stop, emit, backend):
         while not stop.is_set() and time.monotonic() < deadline and (p.unlimited_cycles or completed < p.cycles):
             if not focused_game():
                 release()
+                motion.reset()
                 take_since = close_since = None
                 emit('state', 'Paused — focus Pixel Worlds')
                 if stop.wait(.3):
@@ -322,6 +361,7 @@ def run_visual(p, stop, emit, backend):
             # Drop slow captures instead of steering using an old frame.
             if time.monotonic()-before > .5 or not focused_game() or stop.is_set():
                 release()
+                motion.reset()
                 take_since = close_since = None
                 continue
             now = time.monotonic()
@@ -416,8 +456,7 @@ def run_visual(p, stop, emit, backend):
                 catch_pressed = False
                 result_notice = False
                 full_since = None
-                last_fish = None
-                last_fish_time = 0
+                motion.reset()
                 strike_cleared = True
                 detector.last_bar = None
             if obs.caught:
@@ -452,37 +491,26 @@ def run_visual(p, stop, emit, backend):
                     break
                 stop.wait(max(0,requested_period-(time.monotonic()-before)))
                 continue
-            if obs.bar is not None and obs.fish_x is not None and obs.target_x is not None:
-                if state != 'tracking':
-                    emit('calibration', f'Fishing track located at {obs.bar}')
-                    emit('state', 'Tracking fish — A / D')
-                state = 'tracking'
-                last_seen = now
-                last_fish = obs.fish_x
-                last_fish_time = now
-                key = direction(obs,p.deadband)
+            if obs.bar is not None and not catch_pressed:
+                complete=obs.fish_x is not None and obs.target_x is not None
+                next_state='tracking' if complete else 'reacquiring'
+                if state != next_state:
+                    if complete:
+                        emit('state','Tracking fish — A / D')
+                    else:
+                        emit('state','Reacquiring — bridging brief detection gaps')
+                state=next_state
+                last_seen=now
+                key=motion.key(obs,now,p.deadband)
                 if key != held:
                     release()
                     if key and not p.dry_run and focused_game() and not stop.is_set():
-                        held = key
+                        held=key
                         backend.keyDown(key)
-                    emit('steer', ('DRY ' if p.dry_run else '') + (key or 'release'))
-            elif obs.bar is not None and not catch_pressed:
-                # A visible track with a missing fish is a tracking dropout, not a catch.
-                if state != 'reacquiring':
-                    emit('state','Reacquiring fish — searching the full track')
-                state = 'reacquiring'
-                last_seen = now
-                key = None
-                if last_fish is not None and now-last_fish_time <= .25 and obs.target_x is not None:
-                    key = direction(Observation(fish_x=last_fish,target_x=obs.target_x),p.deadband)
-                if key != held:
-                    release()
-                    if key and not p.dry_run and focused_game() and not stop.is_set():
-                        held = key
-                        backend.keyDown(key)
+                    emit('steer',('DRY ' if p.dry_run else '')+(key or 'release'))
             else:
                 release()
+                motion.reset()
                 if state in ('tracking','reacquiring'):
                     if now-last_seen > .6:
                         emit('state','Waiting for Fish Caught dialog')
