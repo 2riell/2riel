@@ -1,6 +1,7 @@
 """Interruptible, bounded desktop fishing test runner."""
 from dataclasses import dataclass, asdict
 import time
+from itertools import count
 
 @dataclass
 class Profile:
@@ -11,6 +12,7 @@ class Profile:
     bite_wait: float = 4
     cooldown: float = 2
     cycles: int = 30
+    unlimited_cycles: bool = False
     minutes: float = 10
     dry_run: bool = True
     visual: bool = False
@@ -92,7 +94,7 @@ def run(profile, stop, emit, backend=None):
         emit('state', f'Focus game — starting in {p.countdown:g}s')
         if not wait(p.countdown):
             return
-        for cycle in range(1, p.cycles + 1):
+        for cycle in (count(1) if p.unlimited_cycles else range(1, p.cycles + 1)):
             if stop.is_set() or time.monotonic() >= deadline:
                 break
             emit('state', f'Cycle {cycle}: casting')

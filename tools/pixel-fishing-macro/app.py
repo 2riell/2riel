@@ -1,4 +1,5 @@
 import csv
+import time
 import json
 import queue
 import threading
@@ -59,6 +60,9 @@ class App:
         self.metrics=tk.StringVar(value='Tracker — FPS   |   0 completed cycles')
         ttk.Label(summary,textvariable=self.metrics,style='Card.TLabel',font=(ui_font,9)).pack(anchor='w',pady=(6,0))
         self.last_metrics='Tracker — FPS';self.completed=0
+        self.fish=0;self.started_at=None;self.ended_at=None
+        self.session_stats=tk.StringVar(value='Fish collected: 0    ·    Elapsed: 00:00:00')
+        ttk.Label(summary,textvariable=self.session_stats,style='Card.TLabel',font=(ui_font,12,'bold')).pack(anchor='w',pady=(8,0))
         notebook=ttk.Notebook(shell);notebook.pack(fill='both',expand=True,pady=16)
         notebook.configure(height=330)
         def page(label):
@@ -94,6 +98,7 @@ class App:
         ttk.Button(simple,text='Pick bait position · 3 second countdown',command=self.pick_cast).pack(fill='x')
         ttk.Label(simple,text='Hover over a bait icon during the countdown.',style='Muted.TLabel').pack(anchor='w',pady=(7,14))
         fields(simple,[('cycles','Cycle limit'),('minutes','Time limit (min)')])
+        toggle(simple,'unlimited_cycles','Unlimited cycles (time limit still applies)')
         toggle(simple,'dry_run','Dry run — observe without sending input')
         toggle(simple,'auto_cast','Automatically cast at my saved point')
         toggle(simple,'repeat','Take fish and repeat')
@@ -164,6 +169,7 @@ class App:
                 self.listener = keyboard.Listener(on_press=lambda key: self.stop_event.set() if key == keyboard.Key.f8 else None)
                 self.listener.start()
             self.completed=0
+            self.fish=0;self.started_at=time.monotonic();self.ended_at=None
             self.last_metrics='Tracker — FPS'
             self.metrics.set('Tracker — FPS   |   0 completed cycles')
             self.start_button.configure(state='disabled')
@@ -186,6 +192,8 @@ class App:
                 self.last_metrics=message
                 self.metrics.set(f'{message}   |   {self.completed} cycles')
                 continue
+            if kind == 'fish':
+                self.fish=int(message)
             if kind == 'cycle':
                 self.completed=int(message)
                 self.metrics.set(f'{self.last_metrics}   |   {self.completed} cycles')
@@ -202,11 +210,15 @@ class App:
             if kind == 'state':
                 self.status.set(message)
             if kind == 'done':
+                self.ended_at=time.monotonic()
                 self.status.set(f'Stopped · {message} cycles completed (see log for mode)')
                 self.start_button.configure(state='normal')
                 if self.listener:
                     self.listener.stop()
                     self.listener = None
+        elapsed = int(((self.ended_at if self.ended_at is not None else time.monotonic()) - self.started_at)) if self.started_at is not None else 0
+        h,rem=divmod(max(0,elapsed),3600);m,sec=divmod(rem,60)
+        self.session_stats.set(f'Fish collected: {self.fish}    ·    Elapsed: {h:02d}:{m:02d}:{sec:02d}')
         self.root.after(100, self.poll)
 
     def pick_cast(self):

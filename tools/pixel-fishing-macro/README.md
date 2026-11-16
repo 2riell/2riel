@@ -2,6 +2,12 @@
 
 Local Python desktop macro for macOS and Windows. Sends configurable keyboard or mouse inputs, with timed cycles or a calibrated pixel-color bite trigger. This is an independent QA tool, not an official Pixel Worlds integration.
 
+## Session counters and unlimited cycles
+
+Enable **Unlimited cycles** in Simple to ignore the numeric cycle limit. Keep **Take fish and repeat** enabled for continuous visual fishing. The session time limit, timeout stops, Stop button and F8 still apply.
+
+**Fish collected** increments after the live visual mode clicks Take Fish and observes the catch dialog closing. It is an observed collection count, not an inventory audit. Dry runs and timed/pixel sequences do not increment it. **Elapsed** shows HH:MM:SS since Start, including countdown and focus pauses, freezes when the session ends, and resets with the fish counter on the next Start. Unlimited mode is saved with profiles.
+
 ## Simple and Advanced settings
 
 The redesigned dark window opens on **Simple**: cast position picker, cycle/time limits, Dry run, automatic casting, and repeat. **Advanced** contains tracker tuning, timeouts, timed/pixel controls, and **Window opacity (85–100%)**. Opacity is optional and defaults to fully opaque; it makes the entire window translucent rather than adding a blur effect. Settings persist in saved profiles. New Windows sessions default to visual mode; older profiles preserve their selected mode.

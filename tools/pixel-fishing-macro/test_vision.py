@@ -145,7 +145,7 @@ class CollectionTests(unittest.TestCase):
         shifted=cv2.warpAffine(im,np.float32([[1,0,70],[0,1,-50]]),(1920,1080))
         self.assertEqual(Detector().inspect(shifted).take,(1030,738))
 
-    def simulate(self, stuck=False, no_dialog=False, dry=False, repeat=True):
+    def simulate(self, stuck=False, no_dialog=False, dry=False, repeat=True, unlimited=False):
         class Clock:
             now=0.
             def is_set(self):return False
@@ -171,7 +171,7 @@ class CollectionTests(unittest.TestCase):
             if 4.5<=phase<5.5:return Observation(caught=True,take=(960,788))
             return Observation()
         b=Backend();events=[]
-        p=Profile(visual=True,cast_x=1185,cast_y=755,countdown=1,cooldown=.1,minutes=.35,cycles=2,dry_run=dry,repeat=repeat)
+        p=Profile(visual=True,cast_x=1185,cast_y=755,countdown=1,cooldown=.1,minutes=.35,cycles=1 if unlimited else 2,dry_run=dry,repeat=repeat,unlimited_cycles=unlimited)
         with patch('vision.time.monotonic',lambda:clock.now),patch('vision.focused_game',return_value=True),patch('vision.Detector') as d:
             d.return_value.inspect.side_effect=inspect
             run_visual(p,clock,lambda *a:events.append(a),b)
@@ -227,3 +227,13 @@ class FastTrackingTests(unittest.TestCase):
         for kwargs in ({'tracker_hz':0},{'tracker_hz':121},{'deadband':float('nan')},{'opacity':30}):
             with self.assertRaises(ValueError):Profile(**kwargs).validate()
         Profile(tracker_hz=120,deadband=2,opacity=85).validate()
+
+class UnlimitedTests(CollectionTests):
+    def test_unlimited_continues_beyond_cycle_limit(self):
+        clicks,events=self.simulate(unlimited=True)
+        self.assertGreater(sum(e[0]=='cycle' for e in events),1)
+        self.assertEqual(sum(e[0]=='fish' for e in events),sum(e[0]=='cycle' for e in events))
+
+    def test_dry_run_has_no_fish_count(self):
+        _,events=self.simulate(dry=True)
+        self.assertFalse(any(e[0]=='fish' for e in events))

@@ -203,7 +203,7 @@ def run_visual(p, stop, emit, backend):
         emit('state', 'Focus Pixel Worlds — casting after countdown' if p.auto_cast else 'Visual assist: focus Pixel Worlds and cast manually')
         if stop.wait(p.countdown):
             return
-        while not stop.is_set() and time.monotonic() < deadline and completed < p.cycles:
+        while not stop.is_set() and time.monotonic() < deadline and (p.unlimited_cycles or completed < p.cycles):
             if not focused_game():
                 release()
                 take_since = close_since = None
@@ -262,7 +262,9 @@ def run_visual(p, stop, emit, backend):
                 if now-close_since >= .5:
                     completed += 1
                     emit('cycle',str(completed))
-                    if completed >= p.cycles or not p.repeat:
+                    if not p.dry_run:
+                        emit('fish',str(completed))
+                    if (not p.unlimited_cycles and completed >= p.cycles) or not p.repeat:
                         break
                     emit('state','Fish dialog closed — cooldown before next cast')
                     state = 'cooldown'
