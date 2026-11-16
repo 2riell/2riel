@@ -6,6 +6,10 @@ Local Python desktop macro for macOS and Windows. Sends configurable keyboard or
 
 With automatic casting and repeat enabled, the app learns the image around your saved bait point before casting. If tracking ends without a catch dialog, it waits for that image to disappear and then return steadily, waits the cooldown, and casts again. Failed rounds are logged and do not increase Fish collected. Time limits, F8 and normal timeout stops remain active. If the bait point moves, the image cannot be learned (for example, the session starts during a minigame), or the icon does not return, it stops instead of guessing.
 
+## Long waits for a bite
+
+**Wait for STRIKE without a bite timeout** is enabled by default in Advanced, including when loading profiles created before this option existed. The app keeps watching after a long wait and presses Space when STRIKE appears. The numeric Strike timeout is used only when this option is unchecked; even then, a visible STRIKE takes priority over that timeout. The overall session limit still applies unless No time limit is enabled. Stop/F8 and the post-strike/catch checks remain active.
+
 ## Running without limits
 
 **No time limit** is enabled by default for new app sessions. Enable **Unlimited cycles** and **Take fish and repeat** as well to keep fishing until Stop/F8 or a detection/collection error. The numeric time and cycle fields are ignored while their respective unlimited options are enabled. Older saved profiles keep their previous time limit until No time limit is enabled and saved. The elapsed timer still runs; bite and collection timeouts remain recovery/error checks.

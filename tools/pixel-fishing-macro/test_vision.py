@@ -96,7 +96,7 @@ class CastingTests(unittest.TestCase):
             def keyUp(self,key): self.actions.append(('release',key))
         b=Backend();events=[]
         obs=Observation(bar=(549,100,822,70),fish_x=960,target_x=960,target_width=120) if active else Observation()
-        p=Profile(visual=True,cast_x=1185,cast_y=755,dry_run=dry,minutes=.12,visual_timeout=5,countdown=1)
+        p=Profile(visual=True,cast_x=1185,cast_y=755,dry_run=dry,minutes=.12,visual_timeout=5,countdown=1,wait_for_strike=False)
         with patch('vision.time.monotonic',lambda:clock.now), patch('vision.focused_game',lambda:b.focused), patch('vision.Detector') as d:
             d.return_value.inspect.return_value=obs
             run_visual(p,clock,lambda *a:events.append(a),b)
@@ -314,3 +314,29 @@ class ReacquireTests(unittest.TestCase):
         self.assertIn('d',b.keys);self.assertIn('a',b.keys)
         self.assertTrue(any('Reacquiring' in e[1] for e in events))
         self.assertFalse(any(e[0]=='timeout' for e in events))
+
+class LateStrikeTests(unittest.TestCase):
+    def test_late_strike_and_timeout_boundary(self):
+        for unlimited,arrival in [(True,150),(False,6.0)]:
+            class Clock:
+                now=0.
+                cancelled=False
+                def is_set(self):return self.cancelled
+                def wait(self,n):self.now+=max(n,1);return self.cancelled
+            clock=Clock()
+            class Backend:
+                FAILSAFE=True
+                def __init__(self):self.keys=[]
+                def screenshot(self):clock.now+=.01;return np.zeros((1080,1920,3),dtype='uint8')
+                def moveTo(self,*args):pass
+                def mouseDown(self,button):pass
+                def mouseUp(self,button):pass
+                def keyDown(self,key):self.keys.append(key);clock.cancelled=True
+                def keyUp(self,key):self.keys.append('release '+key)
+            b=Backend();events=[]
+            p=Profile(visual=True,cast_x=1185,cast_y=755,dry_run=False,no_time_limit=True,wait_for_strike=unlimited,visual_timeout=5,countdown=1)
+            with patch('vision.time.monotonic',lambda:clock.now),patch('vision.focused_game',return_value=True),patch('vision.Detector') as d:
+                d.return_value.inspect.side_effect=lambda frame:Observation(strike=clock.now>=arrival)
+                run_visual(p,clock,lambda *e:events.append(e),b)
+            self.assertEqual(b.keys,['space','release space'])
+            self.assertFalse(any(e[0]=='timeout' for e in events))

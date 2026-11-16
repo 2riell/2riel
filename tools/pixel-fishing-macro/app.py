@@ -107,6 +107,7 @@ class App:
         ttk.Label(simple,text='1920 × 1080 · maximum zoom · keep the game focused',style='Muted.TLabel').pack(anchor='w',pady=(14,0))
         ttk.Label(advanced,text='TRACKING',style='Muted.TLabel').pack(anchor='w')
         fields(advanced,[('tracker_hz','Target refresh (Hz)'),('deadband','Center tolerance (px)'),('countdown','Start delay (s)'),('cooldown','Recast delay (s)'),('visual_timeout','Strike timeout (s)')])
+        toggle(advanced,'wait_for_strike','Wait for STRIKE without a bite timeout')
         ttk.Label(advanced,text='60 Hz default · 15–120 Hz supported. Actual FPS depends on your PC.\nLower center tolerance starts corrections sooner; it does not change game speed.',style='Muted.TLabel',wraplength=650).pack(anchor='w')
         ttk.Label(advanced,text='APPEARANCE',style='Muted.TLabel').pack(anchor='w',pady=(18,8))
         ttk.Label(advanced,text='Window opacity · 85% to 100%',style='Muted.TLabel').pack(anchor='w')

@@ -389,7 +389,8 @@ def run_visual(p, stop, emit, backend):
                     emit('action', ('DRY ' if p.dry_run else '') + f'cast click at ({p.cast_x}, {p.cast_y})')
                     emit('state', 'Waiting for STRIKE (dry run: cast manually)' if p.dry_run else 'Cast clicked — waiting for STRIKE')
                     continue
-            if cast_time is not None and state == 'waiting' and now-cast_time > p.visual_timeout:
+            if (not p.wait_for_strike and cast_time is not None and state == 'waiting'
+                    and not obs.strike and obs.bar is None and now-cast_time > p.visual_timeout):
                 emit('timeout', 'No strike after casting — check cast point; no repeated clicks sent')
                 break
             if not obs.strike:

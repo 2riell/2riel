@@ -22,6 +22,7 @@ class Profile:
     cast_x: int = -1
     cast_y: int = -1
     visual_timeout: float = 60
+    wait_for_strike: bool = True
     pixel: bool = False
     x: int = 0
     y: int = 0
