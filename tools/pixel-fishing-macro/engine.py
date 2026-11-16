@@ -67,12 +67,13 @@ def run(profile, stop, emit, backend=None):
     if p.visual:
         from vision import run_visual
         return run_visual(p, stop, emit, backend)
-    started = time.monotonic()
-    deadline = float("inf") if p.no_time_limit else started + p.minutes * 60
+    from session import SessionReporter
+    emit = SessionReporter(p,stop,emit)
+    deadline = emit.deadline
 
     def wait(seconds):
-        remaining = max(0, deadline - time.monotonic())
-        return not stop.wait(min(seconds, remaining)) and time.monotonic() < deadline
+        remaining = max(0, deadline() - time.monotonic())
+        return not stop.wait(min(seconds, remaining)) and time.monotonic() < deadline()
 
     def action(name):
         emit('action', ('DRY ' if p.dry_run else '') + name)
@@ -97,15 +98,15 @@ def run(profile, stop, emit, backend=None):
         emit('state', f'Focus game — starting in {p.countdown:g}s')
         if not wait(p.countdown):
             return
-        for cycle in (count(1) if p.unlimited_cycles else range(1, p.cycles + 1)):
-            if stop.is_set() or time.monotonic() >= deadline:
+        for cycle in count(1):
+            if stop.is_set() or time.monotonic() >= deadline() or (not p.unlimited_cycles and completed >= p.cycles):
                 break
             emit('state', f'Cycle {cycle}: casting')
             if not action(p.cast):
                 break
             emit('state', 'Waiting for bite')
             if p.pixel and not p.dry_run:
-                bite_deadline = min(deadline, time.monotonic() + p.bite_wait)
+                bite_deadline = min(deadline(), time.monotonic() + p.bite_wait)
                 # Require the signal to clear before accepting a fresh bite.
                 armed = False
                 detected = False
@@ -123,7 +124,7 @@ def run(profile, stop, emit, backend=None):
                     break
             elif not wait(p.bite_wait):
                 break
-            if stop.is_set() or time.monotonic() >= deadline:
+            if stop.is_set() or time.monotonic() >= deadline():
                 break
             emit('state', f'Cycle {cycle}: reeling')
             if not action(p.reel):

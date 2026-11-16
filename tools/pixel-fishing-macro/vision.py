@@ -312,7 +312,9 @@ def run_visual(p, stop, emit, backend):
     """Coordinate cast, strike, steering, collection, and bounded repeat cycles."""
     detector = Detector()
     cast_ready = CastReady()
-    deadline = float("inf") if p.no_time_limit else time.monotonic() + p.minutes*60
+    from session import SessionReporter
+    emit = SessionReporter(p,stop,emit)
+    deadline = emit.deadline
     held = None
     state = 'waiting'
     completed = 0
@@ -336,6 +338,7 @@ def run_visual(p, stop, emit, backend):
     stats_start = time.monotonic()
     stats_frames = 0
     stats_processing = 0.0
+    focus_paused = False
     requested_period = 1.0/p.tracker_hz
 
     def release():
@@ -351,12 +354,12 @@ def run_visual(p, stop, emit, backend):
                 held = None
 
     def click(point):
-        if stop.is_set() or time.monotonic() >= deadline or not focused_game():
+        if stop.is_set() or time.monotonic() >= deadline() or not focused_game():
             return False
         if p.dry_run:
             return True
         backend.moveTo(*point)
-        if stop.is_set() or time.monotonic() >= deadline or not focused_game():
+        if stop.is_set() or time.monotonic() >= deadline() or not focused_game():
             return False
         try:
             backend.mouseDown(button='left')
@@ -377,15 +380,20 @@ def run_visual(p, stop, emit, backend):
         emit('state', 'Focus Pixel Worlds — casting after countdown' if p.auto_cast else 'Visual assist: focus Pixel Worlds and cast manually')
         if stop.wait(p.countdown):
             return
-        while not stop.is_set() and time.monotonic() < deadline and (p.unlimited_cycles or completed < p.cycles):
+        while not stop.is_set() and time.monotonic() < deadline() and (p.unlimited_cycles or completed < p.cycles):
             if not focused_game():
                 release()
                 motion.reset()
                 take_since = close_since = None
-                emit('state', 'Paused — focus Pixel Worlds')
+                if not focus_paused:
+                    emit('state', 'Paused — focus Pixel Worlds (session stays active)')
+                    focus_paused = True
                 if stop.wait(.3):
                     break
                 continue
+            if focus_paused:
+                emit('state','Game focus restored — resuming')
+                focus_paused = False
             before = time.monotonic()
             frame = capture.grab() if capture else cv2.cvtColor(np.asarray(backend.screenshot()),cv2.COLOR_RGB2BGR)
             obs = detector.inspect(frame)
@@ -409,7 +417,7 @@ def run_visual(p, stop, emit, backend):
                     full_since = now
                 if now-full_since >= .05:
                     release()
-                    if stop.is_set() or time.monotonic() >= deadline or not focused_game():
+                    if stop.is_set() or time.monotonic() >= deadline() or not focused_game():
                         continue
                     if not p.dry_run:
                         held = 'space'
@@ -559,7 +567,7 @@ def run_visual(p, stop, emit, backend):
                         result_notice = True
                 elif obs.strike and strike_cleared:
                     if strikes:
-                        emit('state','Strike repeated without a track — stopped for inspection')
+                        emit('timeout','Strike repeated without a track — stopped for inspection')
                         break
                     strikes += 1
                     strike_cleared = False

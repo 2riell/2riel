@@ -8,6 +8,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from engine import Profile, run
+from session import StopSignal
 
 ROOT = Path(__file__).resolve().parent
 
@@ -19,7 +20,9 @@ class App:
         root.geometry('800x850')
         root.minsize(740, 720)
         self.queue = queue.Queue()
-        self.stop_event = threading.Event()
+        self.stop_event = StopSignal()
+        self.active_profile = None
+        self.end_reason = None
         self.worker = None
         self.listener = None
         self.rows = []
@@ -27,6 +30,8 @@ class App:
         defaults.no_time_limit = True
         defaults.visual = sys.platform in ('win32','darwin')
         self.vars = {k:(tk.BooleanVar(value=v) if isinstance(v,bool) else tk.StringVar(value=str(v))) for k,v in defaults.dict().items()}
+        for name in ('unlimited_cycles','no_time_limit'):
+            self.vars[name].trace_add('write',lambda *args,k=name:self.update_live_limit(k))
         ui_font = 'Segoe UI' if sys.platform == 'win32' else 'Helvetica'
         bg,card,text,muted,accent = '#111416','#1b2023','#edf1f2','#929da3','#58d9df'
         root.geometry('820x780')
@@ -141,7 +146,7 @@ class App:
         toggle(limits,'unlimited_cycles','Unlimited cycles')
         toggle(limits,'no_time_limit','No time limit')
         fields(limits,[('cycles','Cycle limit'),('minutes','Time limit (min)')])
-        ttk.Label(limits,text='Limits apply when unlimited is off.',style='Small.Card.TLabel').pack(anchor='w')
+        ttk.Label(limits,text='Limit toggles apply immediately.',style='Small.Card.TLabel').pack(anchor='w')
         prof=cardbox(right,'Profiles')
         buttons=ttk.Frame(prof,style='Card.TFrame');buttons.pack(fill='x')
         ttk.Button(buttons,text='Load',command=self.load).pack(side='left',expand=True,fill='x',padx=(0,8))
@@ -171,7 +176,7 @@ class App:
         footer=ttk.Frame(shell);footer.pack(fill='x',pady=(12,0))
         ttk.Label(footer,textvariable=self.metrics,style='Muted.TLabel',font=(ui_font,8)).pack(side='left')
         ttk.Label(footer,text='F8 STOP  /  ESC STOP',style='Muted.TLabel',font=(ui_font,8)).pack(side='right')
-        root.bind('<Escape>',lambda e:self.stop())
+        root.bind('<Escape>',lambda e:self.stop('Escape key'))
         root.protocol('WM_DELETE_WINDOW',self.close)
         root.after(100,self.poll)
 
@@ -199,6 +204,8 @@ class App:
             p = self.profile()
             backend = None
             self.stop_event.clear()
+            self.end_reason = None
+            self.active_profile = p
             if p.visual:
                 import sys
                 if sys.platform not in ('win32','darwin'):
@@ -215,7 +222,7 @@ class App:
                     if not backend.onScreen(p.x, p.y):
                         raise ValueError('Bite pixel must be on the primary display')
                     backend.pixel(p.x, p.y)  # Check screen access before countdown.
-                self.listener = keyboard.Listener(on_press=lambda key: self.stop_event.set() if key == keyboard.Key.f8 else None)
+                self.listener = keyboard.Listener(on_press=lambda key: self.stop('F8 hotkey') if key == keyboard.Key.f8 else None)
                 self.listener.start()
             self.completed=0
             self.fish=0;self.items=0;self.started_at=time.monotonic();self.ended_at=None
@@ -230,8 +237,14 @@ class App:
                 self.listener.stop()
             messagebox.showerror('Cannot start', str(exc))
 
-    def stop(self):
-        self.stop_event.set()
+    def update_live_limit(self,name):
+        if self.active_profile is not None and self.worker and self.worker.is_alive():
+            value=bool(self.vars[name].get())
+            setattr(self.active_profile,name,value)
+            self.emit('settings',f'{name}={value} applied to active session')
+
+    def stop(self,reason='Stop button'):
+        self.stop_event.set(reason)
 
     def poll(self):
         for _ in range(150):
@@ -261,9 +274,12 @@ class App:
             self.log.configure(state='disabled')
             if kind == 'state':
                 self.status.set(message)
+            if kind == 'stop_reason':
+                self.end_reason=message
             if kind == 'done':
                 self.ended_at=time.monotonic()
-                self.status.set(f'Stopped · {message} cycles completed (see log for mode)')
+                self.status.set(f'Stopped · {message} cycles · {self.end_reason or "Reason unavailable"}')
+                self.active_profile = None
                 self.start_button.configure(state='normal')
                 self.run_label.set('STOPPED')
                 if self.listener:
@@ -366,7 +382,7 @@ class App:
                 writer.writerows(self.rows)
 
     def close(self):
-        self.stop()
+        self.stop('App window closed')
         if self.worker and self.worker.is_alive():
             self.root.after(100,self.close)
             return

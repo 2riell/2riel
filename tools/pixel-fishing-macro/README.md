@@ -16,6 +16,12 @@ The UI reports **Fish** and **Items** separately. Exact fish-dialog recognition 
 
 **Wait for STRIKE without a bite timeout** is enabled by default in Advanced, including when loading profiles created before this option existed. The app keeps watching after a long wait and presses Space when STRIKE appears. The numeric Strike timeout is used only when this option is unchecked; even then, a visible STRIKE takes priority over that timeout. The overall session limit still applies unless No time limit is enabled. Stop/F8 and the post-strike/catch checks remain active.
 
+## Explicit stop reasons and live limits
+
+**Unlimited cycles** and **No time limit** now apply immediately to a running session, including while it is paused for game focus. Other settings are read when Start is pressed. Earlier versions copied both limit switches at Start, so checking them later only changed the displayed settings until the next run.
+
+The log records effective settings at Start and each live limit change. Every normal runner termination now records **STOP_REASON** before DONE and displays that reason in the status: Stop button, F8 hotkey, Escape key, app closed, time/cycle limit, repeat disabled, timeout/error, or an unexpected runner exit. A focus pause is logged once, with a resume entry when focus returns; losing focus alone does not stop an unlimited session. A test simulates a 30-minute focus pause without auto-termination.
+
 ## Running without limits
 
 **No time limit** is enabled by default for new app sessions. Enable **Unlimited cycles** and **Take fish and repeat** as well to keep fishing until Stop/F8 or a detection/collection error. The numeric time and cycle fields are ignored while their respective unlimited options are enabled. Older saved profiles keep their previous time limit until No time limit is enabled and saved. The elapsed timer still runs; bite and collection timeouts remain recovery/error checks.
