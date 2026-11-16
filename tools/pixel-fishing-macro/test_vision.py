@@ -259,3 +259,34 @@ class FailureRecoveryTests(unittest.TestCase):
         self.assertGreaterEqual(clicks.count((1185,755)),2)
         self.assertTrue(any(e[0]=='failed' for e in events))
         self.assertFalse(any(e[0]=='fish' for e in events))
+
+class FullMeterTests(unittest.TestCase):
+    def test_full_requires_last_segment(self):
+        from vision import progress_full
+        im=scene();bar=(549,100,822,70)
+        for x in range(720,1201,24):
+            cv2.rectangle(im,(x-5,194),(x+5,207),(20,220,240),-1)
+        self.assertTrue(progress_full(im,bar))
+        self.assertTrue(Detector().inspect(im).full)
+        im[194:208,1195:1206]=0
+        self.assertFalse(progress_full(im,bar))
+
+    def test_space_once_per_full_meter_and_dry_run(self):
+        for dry in (False,True):
+            class Clock:
+                now=0.
+                def is_set(self):return False
+                def wait(self,n):self.now+=n;return False
+            clock=Clock()
+            class Backend:
+                FAILSAFE=True
+                def __init__(self):self.keys=[]
+                def screenshot(self):clock.now+=.1;return np.zeros((1080,1920,3),dtype='uint8')
+                def keyDown(self,k):self.keys.append(('down',k))
+                def keyUp(self,k):self.keys.append(('up',k))
+            b=Backend();events=[]
+            with patch('vision.time.monotonic',lambda:clock.now),patch('vision.focused_game',return_value=True),patch('vision.Detector') as d:
+                d.return_value.inspect.return_value=Observation(full=True,bar=(549,100,822,70),fish_x=960,target_x=960,target_width=120)
+                run_visual(Profile(visual=True,auto_cast=False,dry_run=dry,minutes=.06,countdown=1),clock,lambda *e:events.append(e),b)
+            self.assertEqual(b.keys,[] if dry else [('down','space'),('up','space')])
+            self.assertEqual(sum('full meter' in e[1] for e in events),1)

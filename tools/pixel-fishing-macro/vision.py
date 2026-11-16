@@ -28,6 +28,7 @@ def template(name):
 
 @dataclass
 class Observation:
+    full: bool = False
     caught: bool = False
     take: tuple | None = None
     strike: bool = False
@@ -35,6 +36,20 @@ class Observation:
     fish_x: float | None = None
     target_x: float | None = None
     target_width: float = 0
+
+
+def progress_full(frame, bar):
+    x,y,w,h = bar
+    # 21 meter segments measured from the supplied 1920x1080 UI.
+    for offset in range(171,652,24):
+        cx=x+offset
+        patch=frame[y+94:y+107,cx-4:cx+5]
+        if patch.shape[:2] != (13,9):
+            return False
+        b,g,r=cv2.split(patch.astype(np.int16))
+        if ((r>150)&(g>100)&(b<g*.8)).mean() < .55:
+            return False
+    return True
 
 
 def direction(obs, deadband_pixels=8):
@@ -105,7 +120,7 @@ class Detector:
         b,g,r = cv2.split(strip)
         if ((b > 120) & (b > r*1.4) & (g > 60)).mean() < .60:
             return None
-        obs = Observation(bar=bar)
+        obs = Observation(bar=bar,full=progress_full(frame,bar))
         left,right = max(0,x-80),min(1920,x+w+80)
         top = max(0,y-6)
         mask = tracking_mask(frame[top:y+h,left:right])
@@ -187,6 +202,8 @@ def run_visual(p, stop, emit, backend):
     completed = 0
     last_seen = time.monotonic()
     strike_cleared = True
+    catch_pressed = False
+    full_since = None
     strikes = 0
     cast_sent = False
     cast_time = None
@@ -262,6 +279,28 @@ def run_visual(p, stop, emit, backend):
                 emit('metrics', f'{stats_frames/(now-stats_start):.1f} FPS | {1000*stats_processing/stats_frames:.1f} ms capture + detect')
                 stats_start,stats_frames,stats_processing = now,0,0.0
             ready_to_recast = cast_ready.returned(frame,(p.cast_x,p.cast_y),now) if p.auto_cast else False
+            if not obs.full:
+                full_since = None
+            elif not catch_pressed and obs.bar is not None:
+                if full_since is None:
+                    full_since = now
+                if now-full_since >= .05:
+                    release()
+                    if stop.is_set() or time.monotonic() >= deadline or not focused_game():
+                        continue
+                    if not p.dry_run:
+                        held = 'space'
+                        try:
+                            backend.keyDown(held)
+                            stop.wait(.06)
+                        finally:
+                            release()
+                    catch_pressed = True
+                    state = 'await_catch'
+                    last_seen = now
+                    emit('action',('DRY ' if p.dry_run else '')+'space (full meter — catch fish)')
+                    emit('state','Catch pressed — waiting for Fish Caught dialog')
+                    continue
             # Collection is separate from tracking: loss of the bar is not success.
             if obs.take is not None:
                 release()
@@ -316,6 +355,8 @@ def run_visual(p, stop, emit, backend):
                 cast_sent = False
                 cast_time = None
                 strikes = 0
+                catch_pressed = False
+                full_since = None
                 strike_cleared = True
                 detector.last_bar = None
             if obs.caught:
@@ -342,6 +383,13 @@ def run_visual(p, stop, emit, backend):
                 break
             if not obs.strike:
                 strike_cleared = True
+            if catch_pressed and state == 'await_catch' and obs.bar is not None:
+                release()
+                if now-last_seen > 12:
+                    emit('timeout','Catch did not complete after Space')
+                    break
+                stop.wait(max(0,requested_period-(time.monotonic()-before)))
+                continue
             if obs.bar is not None and obs.fish_x is not None and obs.target_x is not None:
                 if state != 'tracking':
                     emit('calibration', f'Fishing track located at {obs.bar}')
